@@ -111,7 +111,7 @@ while True:
 	if n == dividend_time:
 		for a in informed_agents:
 			a.update_val(dividend_amt)
-			a.update_info(None, None)
+			a.update_info(next_dividend=-1, dividend_amt=0)
 		dividend_out = False
 
 	# select next dividends if none and which agents know

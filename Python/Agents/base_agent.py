@@ -1,8 +1,8 @@
 class BaseAgent():
 	current_val = None # value of current holdings?
 	informed = False
-	next_dividend = None
-	dividend_amt = None
+	next_dividend = -1 # -1 if no info known - can't act? ideally would be None
+	dividend_amt = 0 # 0 for no info known - ideally is None
 
 	def __init__(self):
 		self.current_val = 0
@@ -42,4 +42,6 @@ class BaseAgent():
 			state_vector.append(o['ask depth'])
 
 		state_vector.append(obs[len(obs)-1]['round'])
+		state_vector.append(next_dividend)
+		state_vector.append(dividend_amt)
 		return state_vector
