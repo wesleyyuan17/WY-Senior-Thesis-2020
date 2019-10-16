@@ -4,6 +4,7 @@ import random
 from Agents.random_agent import RandomAgent
 from HelperClasses import Memory
 import constants as c
+from HelperFunctions import *
 
 # initialize agents
 # can update with inclusion of informed or noise traders
@@ -26,11 +27,13 @@ if not c.CONCURRENT_DIVIDEND:
 		a.update_info(dividend_time, dividend_amt)
 
 # initialize market
-current_market = {'bid': None,
-				  'bid depth': None,
-				  'ask': None,
-				  'ask depth': None,
+current_market = {'bid prices': None,
+				  'bid volumes': None,
+				  'ask prices': None,
+				  'ask volumes': None,
 				  'round': n}
+buy_actions = {} # used to organize actions from agents and to create market
+sell_actions = {}
 
 mem = Memory(mem_size=100000, batch_size=c.BATCH_SIZE, window=c.BATCH_WINDOW)
 
@@ -39,70 +42,57 @@ while True:
 	if n > c.DEBUG_ROUNDS:
 		break
 	# get actions from agents
-	actions = []
+	# actions = []
 	for a in agents:
 		if n < c.BATCH_SIZE + c.BATCH_WINDOW:
-			actions.append(a.act())
+			act = a.act()
+			p = act['price']
+			v = act['volume']
+			if act['action'] == c.BUY_ORDER: 	# action is buy order
+				if p in sell_actions: 			# buy order fills current ask
+					ask_v = sell_actions[p]
+					if ask_v > v:
+						sell_actions[p] -= v 	# update price-level volume
+						break
+					else:
+						del sell_actions[p]
+				if p in buy_actions: 			# buy order price level exists, update
+					buy_actions[p] += v
+				else: 							# buy order price level doesn't currently exist
+					buy_actions[p] = v
+			if act['action'] == c.SELL_ORDER: 	# action is sell order
+				if p in buy_actions:			# sell order fills current bid
+					bid_v = buy_actions[p]
+					if bid_v > v:
+						buy_actions[p] -= v 	# update pricel-level volume
+						break
+					else:
+						del buy_actions[p]
+				if p in sell_actions:			# sell order price level exists, update
+					sell_actions[p] += v
+				else:
+					sell_actions[p] = v 		# buy order price level doesn't currently exist
+			# actions.append(a.act())
 		else:
 			current_state = mem.get_current_state()
 			actions.append(a.act(current_state))
 
 
 	# organize buy/sell orders in descending/ascending
-	buy_orders = sorted(filter(lambda action: action['action'] == c.BUY_ORDER, actions), key=lambda action: action['price'], reverse=True)
-	sell_orders = sorted(filter(lambda action: action['action'] == c.SELL_ORDER, actions), key=lambda action: action['price'])
+	# buy_orders = sorted(filter(lambda action: action['action'] == c.BUY_ORDER, actions), key=lambda action: action['price'], reverse=True)
+	# sell_orders = sorted(filter(lambda action: action['action'] == c.SELL_ORDER, actions), key=lambda action: action['price'])
+	bid_px, bid_vol = dict_to_list(buy_actions, bid=True)
+	ask_px, ask_vol = dict_to_list(sell_actions, bid=False)
 
 	# fill orders
-	while len(buy_orders) > 0 and len(sell_orders) > 0 and buy_orders[0]['price'] >= sell_orders[0]['price']:
-		buy_volume = buy_orders[0]['volume']
-		sell_volume = sell_orders[0]['volume']
-		if buy_volume < sell_volume:
-			sell_orders[0]['volume'] = sell_volume - buy_volume
-			del buy_orders[0]
-		elif buy_volume > sell_volume:
-			buy_orders[0]['volume'] = buy_volume - sell_volume
-			del sell_orders[0]
-		else:
-			del buy_orders[0]
-			del sell_orders[0]
+	fill_orders(bid_px, bid_vol, ask_px, ask_vol)
 
-	if len(sell_orders) == 0:
-
-		bid_depth = 0
-		for b in buy_orders:
-			bid_depth += b['volume']
-
-		current_market = {'bid': buy_orders[0]['price'],
-						  'bid depth': buy_orders[0]['volume'], # top volume, maybe change to sum of volumes?
-						  'ask': None,
-						  'ask depth': 0,
-						  'round': n}
-	elif len(buy_orders) == 0:
-
-		ask_depth = 0
-		for s in sell_orders:
-			ask_depth += s['volume']
-
-		current_market = {'bid': None,
-						  'bid depth': 0, # top volume, maybe change to sum of volumes?
-						  'ask': sell_orders[0]['price'],
-						  'ask depth': ask_depth,
-						  'round': n}
-	else:
-
-		bid_depth = 0
-		for b in buy_orders:
-			bid_depth += b['volume']
-
-		ask_depth = 0
-		for s in sell_orders:
-			ask_depth += s['volume']
-
-		current_market = {'bid': buy_orders[0]['price'],
-						  'bid depth': bid_depth, # top volume, maybe change to sum of volumes?
-						  'ask': sell_orders[0]['price'],
-						  'ask depth': ask_depth,
-						  'round': n}
+	# create new market state
+	current_market = {'bid prices': bid_px,
+					  'bid volumes': bid_vol,
+					  'ask prices': ask_px,
+					  'ask volumes': ask_vol,
+					  'round': n}
 
 	# update memory
 	mem.add_memory(current_market)
