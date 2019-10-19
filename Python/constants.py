@@ -7,10 +7,12 @@ NO_ACTION = 2
 DEBUG = True # True for testing
 if DEBUG:
 	DEBUG_ROUNDS = 10000
-NUM_AGENTS = 200
+NUM_TRAINED_AGENTS = 2
+PERCENT_INFORMED = 0.5
+NUM_NOISE_AGENTS = 10
+NOISE_ACTION_SPACE = 300
 
 # Dividend parameters
-CONCURRENT_DIVIDEND = False # overlapping dividends?
 DIVIDEND_PROB = 0.2 # change distribution of dividend dates
 DIVIDEND_MEAN = 0 # change distribution of dividend amount, maybe go for fat tailed?
 DIVIDEND_STD = 1

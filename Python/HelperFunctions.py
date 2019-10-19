@@ -1,3 +1,5 @@
+import numpy as np
+
 def dict_to_list(d, bid=True):
 	'''
 	Function that converts a dictionary of price, volume pairs and returns each in its own list
@@ -7,13 +9,40 @@ def dict_to_list(d, bid=True):
 	Returns:
 		2 lists, one with all prices, one with all volumes, same index are associated
 	'''
-	prices = []
-	volumes = []
-	for k,v in d.items():
-		prices.append(k)
-		volumes.append(v)
+	price_volume = []
+	for k, v in d.items():
+		price_volume.append( (k, len(v)) )
 
-	return prices.sort(reverse=bid), volumes.sort(reverse=bid)
+	price_volume.sort(key=lambda x: x[0], reverse=bid)
+
+	return price_volume
+
+def order_book_to_market(bid_px_vol, ask_px_vol, n):
+	'''
+	Turns current limit order book into a state of market of 4 n-vectors
+	Args:
+		bid_px_vol: list, list of tuples of current bid price/volumes in descending order
+		ask_px_vol: list, list of tuples of current ask price/volumes in descending order
+		n: int, how deep into orders on each side to go to create market state (0 pad if less than n)
+	Returns:
+		market state as a 4xn numpy array
+	'''
+	bid_px_vol_array = np.array(bid_px_vol)
+	nrow = bid_px_vol_array.shape[0]
+	if len(bid_px_vol_array) > 0:
+		bid_px_vol_array = np.pad(bid_px_vol_array, ((0, max(0, 10-nrow)), (0,0)), 'constant')
+	else:
+		bid_px_vol_array = np.zeros(shape=(10,2))
+
+	ask_px_vol_array = np.array(ask_px_vol)
+	nrow = ask_px_vol_array.shape[0]
+	if len(ask_px_vol_array) > 0:
+		ask_px_vol_array = np.pad(ask_px_vol_array, ((0, max(0, 10-nrow)), (0,0)), 'constant')
+	else:
+		ask_px_vol_array = np.zeros(shape=(10,2))
+
+	return np.hstack( (bid_px_vol_array[:10, :], ask_px_vol_array[:10,:]) ).T
+
 
 def fill_orders(bid_px, bid_vol, ask_px, ask_vol):
 	'''
