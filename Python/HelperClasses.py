@@ -20,7 +20,7 @@ class Memory():
 		self.batch_size = batch_size
 		self.window = window
 		self.count = 0
-		self.state = np.zeros(shape=(1,1,self.window))
+		self.state = np.zeros(shape=(4,10,self.window))
 
 	# Add new experience to memory
 	def add_memory(self, market_state):
@@ -32,17 +32,18 @@ class Memory():
 		if self.count >= self.max_mem_size:
 			self.market_history.pop(0)
 		self.count = min(self.count + 1, self.max_mem_size)
+		self.state = np.append(self.state[:, :, 1:], market_state[:, :, None], axis=2)
 
 	# get sequence of memory as current state
 	def get_current_state(self):
-		return self.market_history[self.count - self.window:]
+		return self.market_history[self.count - self.window:, ...]
 
 	# randomly select slices of memory to return for training
 	def get_rand_minibatch(self):
 		idx = np.random.choice(self.count - self.window, batch_size, replace=False)
 		batch = []
 		for i in idx:
-			batch.append( (self.market_history[i:i+self.window]) )
+			batch.append( (self.market_history[i:i+self.window, ...]) )
 		return batch
 
 	# get last batch_size number of states from memory
@@ -50,7 +51,7 @@ class Memory():
 		batch = []
 		for i in range(batch_size):
 			idx = self.count - i - self.window
-			batch.append( (self.market_history[idx:idx+self.window]) )
+			batch.append( (self.market_history[idx:idx+self.window, ...]) )
 		return batch
 
 class Market():
@@ -71,18 +72,23 @@ class Market():
 		self.max_bid = -np.inf
 		self.current_market = np.zeros(shape=(4,10))
 
-	def update(self, actions, training_agents, noise_agents, n):
-
-		self.get_actions(actions, training_agents, noise_agents)
+	def update(self, agent_actions, training_agents, noise_agents, n):
+		'''
+		called in game to perform necessary updates to market and agents
+		Args:
+			actions: list, contains agentId with associated action for this round for each agent
+			training_agents: dict, key is agentId, action is 
+		'''
+		self.get_actions(agent_actions, training_agents, noise_agents)
 
 		self.cancel_orders(n)
 		self.create_market()
 
 		return self.current_market
 
-	def get_actions(self, actions, training_agents, noise_agents):
+	def get_actions(self, agent_actions, training_agents, noise_agents):
 		# get actions from agents
-		for agId, act in actions:
+		for agId, act in agent_actions.items():
 			oId, action, price, duration = act
 			if action == 0:															# action is buy order
 

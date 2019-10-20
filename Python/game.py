@@ -34,6 +34,7 @@ for a in informed_agents:
 
 # initialize market
 current_market = np.zeros(shape=(4,10)) # each row is top 10 of bid/ask price/volume
+agent_actions = {}
 # buy_actions = {} # key is price, value is list of tuples of (agent ID, orderID, cancellation times)
 # sell_actions = {}
 # min_ask = np.inf
@@ -55,13 +56,15 @@ while True:
 	if n > c.DEBUG_ROUNDS:
 		break
 
-	actions = []
+	# get actions from agents
 	for agId, ag in noise_agents.items():
-		actions.append([agId, ag.act(current_market, n)])
+		agent_actions[agId] = ag.act(current_market, n)
 	for agId, ag in training_agents.items():
-		actions.append([agId, ag.act(current_market, n)])
+		agent_actions[agId] = ag.act(current_market, n)
 
-	current_market = market.update(actions, training_agents, noise_agents, n)
+	# pass actions to market object to update state and agents
+	current_market = market.update(agent_actions, training_agents, noise_agents, n)
+
 	# update memory
 	mem.add_memory(current_market)
 
