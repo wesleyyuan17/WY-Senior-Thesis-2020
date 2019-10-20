@@ -12,10 +12,11 @@ PERCENT_INFORMED = 0.5
 NUM_NOISE_AGENTS = 10
 NOISE_ACTION_SPACE = 300
 
-# Dividend parameters
+# market parameters
 DIVIDEND_PROB = 0.2 # change distribution of dividend dates
 DIVIDEND_MEAN = 0 # change distribution of dividend amount, maybe go for fat tailed?
 DIVIDEND_STD = 1
+MARKET_DEPTH = 10
 
 # control training parameters
 BATCH_SIZE = 20 # number of states returned per training cycle

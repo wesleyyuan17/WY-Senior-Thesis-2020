@@ -45,7 +45,7 @@ agent_actions = {}
 # memory object needs refactoring #
 ###################################
 mem = Memory(mem_size=100000, batch_size=c.BATCH_SIZE, window=c.BATCH_WINDOW)
-market = Market()
+market = Market(c.MARKET_DEPTH)
 
 # run game loop
 while True:

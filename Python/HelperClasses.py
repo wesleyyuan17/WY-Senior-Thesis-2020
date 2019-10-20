@@ -64,20 +64,31 @@ class Market():
 	max_bid = None
 	current_market = None
 	n = None
+	k = None
 
-	def __init__(self):
+	def __init__(self, k):
+		'''
+		Initializes market object
+		Args:
+			k: int, depth of market state desired as return
+		'''
 		self.buy_actions = {}
 		self.sell_actions = {}
 		self.min_ask = np.inf
 		self.max_bid = -np.inf
-		self.current_market = np.zeros(shape=(4,10))
+		self.k = k
+		self.current_market = np.zeros(shape=(4,self.k))
 
 	def update(self, agent_actions, training_agents, noise_agents, n):
 		'''
 		called in game to perform necessary updates to market and agents
 		Args:
-			actions: list, contains agentId with associated action for this round for each agent
-			training_agents: dict, key is agentId, action is 
+			agent_actions: dict, key is agentId, value is action for this round for agent
+			training_agents: dict, key is agentId, value is the agent object
+			noise_agents: dict, key is agentId, value is the agent object
+			n: int, round number of game
+		Returns:
+			a 4xk numpy array of bid price/volume then ask price/volume as rows to depth k
 		'''
 		self.get_actions(agent_actions, training_agents, noise_agents)
 
@@ -87,7 +98,13 @@ class Market():
 		return self.current_market
 
 	def get_actions(self, agent_actions, training_agents, noise_agents):
-		# get actions from agents
+		'''
+		iterates through actions and updates market
+		Args:
+			agent_actions: dict, key is agentId, value is action for this round for agent
+			training_agents: dict, key is agentId, value is the agent object
+			noise_agents: dict, key is agentId, value is the agent object
+		'''
 		for agId, act in agent_actions.items():
 			oId, action, price, duration = act
 			if action == 0:															# action is buy order
@@ -148,6 +165,11 @@ class Market():
 						self.min_ask = int(price)
 
 	def cancel_orders(self, n):
+		'''
+		cancels all orders set to expire on next round before start of next round
+		Args:
+			n: int, round number of game
+		'''
 		for k, v in self.buy_actions.items():
 			self.buy_actions[k] = [tup for tup in v if tup[2] > n+1]
 		self.buy_actions = {k:v for k,v in self.buy_actions.items() if len(v) > 0}
@@ -168,11 +190,14 @@ class Market():
 			self.min_ask = np.inf
 
 	def create_market(self):
+		'''
+		Turns dictionaries of buy/sell actions into a 4xk numpy array as market state
+		'''
 		bid_px_vol = self.dict_to_list(self.buy_actions, bid=True)
 		ask_px_vol = self.dict_to_list(self.sell_actions, bid=False)
 
 		# create new market state
-		self.current_market = self.order_book_to_market(bid_px_vol, ask_px_vol, 10)
+		self.current_market = self.order_book_to_market(bid_px_vol, ask_px_vol)
 
 	def dict_to_list(self, d, bid=True):
 		'''
@@ -191,7 +216,7 @@ class Market():
 
 		return price_volume
 
-	def order_book_to_market(self, bid_px_vol, ask_px_vol, k):
+	def order_book_to_market(self, bid_px_vol, ask_px_vol):
 		'''
 		Turns current limit order book into a state of market of 4 n-vectors
 		Args:
@@ -199,23 +224,23 @@ class Market():
 			ask_px_vol: list, list of tuples of current ask price/volumes in descending order
 			n: int, how deep into orders on each side to go to create market state (0 pad if less than n)
 		Returns:
-			market state as a 4xn numpy array
+			market state as a 4xk numpy array
 		'''
 		bid_px_vol_array = np.array(bid_px_vol)
 		nrow = bid_px_vol_array.shape[0]
 		if len(bid_px_vol_array) > 0:
-			bid_px_vol_array = np.pad(bid_px_vol_array, ((0, max(0, 10-nrow)), (0,0)), 'constant')
+			bid_px_vol_array = np.pad(bid_px_vol_array, ((0, max(0, self.k-nrow)), (0,0)), 'constant')
 		else:
-			bid_px_vol_array = np.zeros(shape=(10,2))
+			bid_px_vol_array = np.zeros(shape=(self.k,2))
 
 		ask_px_vol_array = np.array(ask_px_vol)
 		nrow = ask_px_vol_array.shape[0]
 		if len(ask_px_vol_array) > 0:
-			ask_px_vol_array = np.pad(ask_px_vol_array, ((0, max(0, 10-nrow)), (0,0)), 'constant')
+			ask_px_vol_array = np.pad(ask_px_vol_array, ((0, max(0, self.k-nrow)), (0,0)), 'constant')
 		else:
-			ask_px_vol_array = np.zeros(shape=(10,2))
+			ask_px_vol_array = np.zeros(shape=(self.k,2))
 
-		return np.hstack( (bid_px_vol_array[:k, :], ask_px_vol_array[:k,:]) ).T
+		return np.hstack( (bid_px_vol_array[:self.k, :], ask_px_vol_array[:self.k,:]) ).T
 
 
 
