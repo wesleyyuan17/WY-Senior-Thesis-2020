@@ -2,15 +2,20 @@ import numpy as np
 import random
 
 from Agents.random_agent import RandomAgent
+from Agents.training_agent import TrainingAgent
 from HelperClasses import *
 import constants as c
 from HelperFunctions import *
+
+if c.DEBUG:
+	import csv
+	import matplotlib.pyplot as plt
 
 # initialize agents
 # can update with inclusion of informed or noise traders
 training_agents = {}
 for n in range(c.NUM_TRAINED_AGENTS):
-	training_agents['t' + str(n)] = RandomAgent(c.NOISE_ACTION_SPACE, n)
+	training_agents['t' + str(n)] = TrainingAgent(n)
 
 noise_agents = {}
 for n in range(c.NUM_NOISE_AGENTS):
@@ -48,22 +53,41 @@ mem = Memory(mem_size=100000, batch_size=c.BATCH_SIZE, window=c.BATCH_WINDOW)
 market = Market(c.MARKET_DEPTH)
 
 # run game loop
+price = 0
+prices = []
 while True:
 	if c.DEBUG:
-		print(n)
-		print(current_market)
+		# print(n)
+		# print('current market:', current_market)
+		print('price:', price)
+		prices.append(price)
 
 	if n > c.DEBUG_ROUNDS:
+		# write to csv for reading in data in R for statistical test
+		with open('prices.csv', 'w', newline='') as myfile: 
+			wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
+			for p in prices:
+				wr.writerow([p])
+
+		# plot graph of price movements
+		plt.figure(figsize=(50,10))
+		plt.plot(range(0,len(prices)), prices)
 		break
+		'''
+		Tests show prices are somewhat realistic with Dickey-Fuller tests showing log-prices move with high probability
+		following a random walk with drift
+		Drift: -135.0677 (-8.437 critical value)
+		No Drift: 3602.554 (-13.96 critical value)
+		'''
 
 	# get actions from agents
 	for agId, ag in noise_agents.items():
 		agent_actions[agId] = ag.act(current_market, n)
-	for agId, ag in training_agents.items():
-		agent_actions[agId] = ag.act(current_market, n)
+	# for agId, ag in training_agents.items():
+	# 	agent_actions[agId] = ag.act(current_market, n)
 
 	# pass actions to market object to update state and agents
-	current_market = market.update(agent_actions, training_agents, noise_agents, n)
+	current_market, price, num_trades_filled = market.update(agent_actions, training_agents, noise_agents, n)
 
 	# update memory
 	mem.add_memory(current_market)
@@ -72,10 +96,10 @@ while True:
 	if n == dividend_time:
 		for _, a in training_agents.items():
 			a.update_val(dividend_amt)
-			a.update_info(next_dividend=-1, dividend_amt=0)
+			# a.update_info(next_dividend=-1, dividend_amt=0)
 		for _, a in noise_agents.items():
 			a.update_val(dividend_amt)
-			a.update_info(next_dividend=-1, dividend_amt=0)
+			# a.update_info(next_dividend=-1, dividend_amt=0)
 		dividend_out = False
 
 	# select next dividends if none and which agents know
@@ -92,3 +116,5 @@ while True:
 			a.update_info(dividend_time, dividend_amt)
 
 	n += 1
+
+plt.show()
