@@ -48,7 +48,8 @@ class RandomAgent(BaseAgent):
 		if npr.rand() < 0.1: # cross bid/ask spread 10% of the time
 			return ref_price + phi*10 # 10 to be sure it crosses?
 		else:
-			return ref_price - phi*10*npr.rand() # npr.randint(0,11) # up to 10 to have a deep enough book?
+			return ref_price - phi*npr.randint(0,11) # up to 10 to have a deep enough book?
+			# phi*10*npr.rand() for continuous
 
 
 

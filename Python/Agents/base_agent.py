@@ -20,7 +20,7 @@ class BaseAgent():
 		Args:
 			dividend_amt: int, amount to increase cash holdings by per unit of asset held
 		'''
-		self.cash += self.assets * dividend_amt
+		self.cash += max(self.assets, 0) * dividend_amt
 
 	def cancel_orders(self, n):
 		'''

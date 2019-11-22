@@ -58,16 +58,19 @@ prices = []
 while True:
 	if c.DEBUG:
 		# print(n)
-		# print('current market:', current_market)
-		print('price:', price)
+		# print('current market:\n', current_market)
+		# print('price:', price)
 		prices.append(price)
 
 	if n > c.DEBUG_ROUNDS:
 		# write to csv for reading in data in R for statistical test
 		with open('prices.csv', 'w', newline='') as myfile: 
 			wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
+			i = 0
 			for p in prices:
-				wr.writerow([p])
+				if i % 100 == 0:
+					wr.writerow([p])
+				i += 1
 
 		# plot graph of price movements
 		plt.figure(figsize=(50,10))
