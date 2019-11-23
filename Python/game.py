@@ -3,9 +3,8 @@ import random
 
 from Agents.random_agent import RandomAgent
 from Agents.training_agent import TrainingAgent
-from HelperClasses import *
+from MarketClass import *
 import constants as c
-from HelperFunctions import *
 
 if c.DEBUG:
 	import csv
