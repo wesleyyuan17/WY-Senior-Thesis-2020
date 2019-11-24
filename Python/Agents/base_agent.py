@@ -4,13 +4,24 @@ class BaseAgent():
 	assets = None 		# number of shares of asset agent has
 	open_orders = None 	# dict, key is tradeID, value is action, price, duration tuple
 
-	def __init__(self, ID):
+	def __init__(self, ID, agent_type):
+		'''
+		Initialize agent
+		Args:
+			ID: int, unique identifier for agent
+			agent_type: string, 'noise', 'informed', or 'uninformed' to know what kind of agent
+		'''
 		self.cash = 0
 		self.assets = 0
-		self.agentId = 'n' + str(ID)
+		if agent_type == 'noise':
+			self.agentId = 'n' + str(ID)
+		elif agent_type == 'informed':
+			self.agentId = 'i' + str(ID)
+		elif agent_type == 'uninformed':
+			self.agentId = 'u' + str(ID)
 		self.open_orders = {}
 
-	def act(self, obs=None):
+	def act(self):
 		''' To be implemented in each class on how to act given current state '''
 		raise NotImplementedError()
 
@@ -52,8 +63,9 @@ class BaseAgent():
 	# 	self.current_val += 1
 
 	# helper function to convert observation to vector
-	def state_parser(self, obs):
+	def state_parser(self, obs=None, n=0):
 		'''
 		Args:
-
+			obs: , representation of current state passed to informed agents
 		'''
+		raise NotImplementedError()

@@ -6,14 +6,19 @@ class RandomAgent(BaseAgent):
 	'''
 	def __init__(self, n_actions, ID):
 		'''
+		Initialize agent to act within a set of n_action actions with own ID
 		'''
-		super().__init__(ID)
+		super().__init__(ID, 'noise')
 		self.mean_duration = 10
 		self.n_actions = n_actions
 
 	# determine action based on current state
 	def act(self, obs, n): # how obs is represented may change
 		'''
+		Takes a random action based on current market state
+		Args:
+			obs: 4xk array, represents bid price/volume in decreasing order and ask price/volume in increasing order
+			n: int, the time step
 		'''
 		# update open orders for next round
 		super().cancel_orders(n)

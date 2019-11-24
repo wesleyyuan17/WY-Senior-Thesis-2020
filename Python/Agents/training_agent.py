@@ -11,8 +11,8 @@ class TrainingAgent(BaseAgent):
 	main_DQN = None		# DQN that learns actions
 	target_DQN = None	# DQN that acts as target in double q learning
 
-	def __init__(self, ID):
-		super().__init__(ID)
+	def __init__(self, ID, agent_type):
+		super().__init__(ID, agent_type)
 		self.next_dividend = -1
 		self.dividend_amt = 0
 		self.prev_value = 0
