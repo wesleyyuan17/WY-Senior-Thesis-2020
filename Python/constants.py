@@ -13,7 +13,7 @@ NUM_NOISE_AGENTS = 20
 NOISE_ACTION_SPACE = 300
 
 # market parameters
-DIVIDEND_PROB = 0.2 # change distribution of dividend dates
+DIVIDEND_PROB = 0.05 # change distribution of dividend dates
 DIVIDEND_MEAN = 0 # change distribution of dividend amount, maybe go for fat tailed?
 DIVIDEND_STD = 1
 MARKET_DEPTH = 10

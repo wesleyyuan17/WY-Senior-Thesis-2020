@@ -36,14 +36,14 @@ class Market():
 		Returns:
 			a 4xk numpy array of bid price/volume then ask price/volume as rows to depth k
 		'''
-		self.clear_market(agent_actions, training_agents, noise_agents)
+		self._clear_market(agent_actions, training_agents, noise_agents)
 
-		self.cancel_orders(n)
-		self.create_market()
+		self._cancel_orders(n)
+		self._create_market()
 
 		return self.current_market, self.price, self.num_trades_filled
 
-	def clear_market(self, agent_actions, training_agents, noise_agents):
+	def _clear_market(self, agent_actions, training_agents, noise_agents):
 		'''
 		iterates through actions and adds them to LOB, then finds market-clearing price and fills
 		orders and notifies agents
@@ -55,11 +55,11 @@ class Market():
 
 		# add orders to limit order book
 		for agId, act in agent_actions.items():
-			self.add_to_book(agId, act)
+			self._add_to_book(agId, act)
 
 		# find the market-clearing price
-		bid_px_vol = self.price_volume(bid=True)
-		ask_px_vol = self.price_volume(bid=False)
+		bid_px_vol = self._price_volume(bid=True)
+		ask_px_vol = self._price_volume(bid=False)
 
 		bid_px = bid_px_vol[:,0] # all prices of bid orders currently in order book
 		bid_vol = bid_px_vol[:,1] # corresponding volumes for prices currently in order book
@@ -96,10 +96,10 @@ class Market():
 			self.price = 0.5 * (ask_px[ask_idx] + bid_px[bid_idx])
 
 		# fill orders
-		self.fill_orders(bid_px, bid_vol, bid_idx, training_agents, noise_agents, True)
-		self.fill_orders(ask_px, ask_vol, ask_idx, training_agents, noise_agents, False)
+		self._fill_orders(bid_px, bid_vol, bid_idx, training_agents, noise_agents, True)
+		self._fill_orders(ask_px, ask_vol, ask_idx, training_agents, noise_agents, False)
 
-	def fill_orders(self, px, vol, idx, training_agents, noise_agents, bid):
+	def _fill_orders(self, px, vol, idx, training_agents, noise_agents, bid):
 		'''
 		Fills all orders found possible, notifies agents and updates the limit order book
 		Args:
@@ -142,7 +142,7 @@ class Market():
 						noise_agents[agId].filled_order( (oId, action, self.price) )
 				orders[temp_px] = [acts[j] for j in (set(list(range(temp_vol))) - set(fill_orders))]
 
-	def add_to_book(self, agent_Id, agent_action):
+	def _add_to_book(self, agent_Id, agent_action):
 		'''
 		takes agent IDs and actions and inserts in limit order book
 		Args:
@@ -161,8 +161,7 @@ class Market():
 			else:														# new price is current lowest unfilled ask
 				self.sell_actions[price] = [(agent_Id, oId, duration)]
 		
-
-	def cancel_orders(self, n):
+	def _cancel_orders(self, n):
 		'''
 		cancels all orders set to expire on next round before start of next round
 		Args:
@@ -190,17 +189,17 @@ class Market():
 		else:
 			self.min_ask = np.inf
 
-	def create_market(self):
+	def _create_market(self):
 		'''
 		Turns dictionaries of buy/sell actions into a 4xk numpy array as market state
 		'''
-		bid_px_vol = self.price_volume(bid=True)
-		ask_px_vol = self.price_volume(bid=False)
+		bid_px_vol = self._price_volume(bid=True)
+		ask_px_vol = self._price_volume(bid=False)
 
 		# create new market state
-		self.current_market = self.order_book_to_market(bid_px_vol, ask_px_vol)
+		self.current_market = self._order_book_to_market(bid_px_vol, ask_px_vol)
 
-	def price_volume(self, bid=True):
+	def _price_volume(self, bid=True):
 		'''
 		Function that returns price, volume pairs for bid/ask in numpy array
 		Args:
@@ -222,7 +221,7 @@ class Market():
 
 		return np.array(price_volume)
 
-	def order_book_to_market(self, bid_px_vol, ask_px_vol):
+	def _order_book_to_market(self, bid_px_vol, ask_px_vol):
 		'''
 		Turns current limit order book into a state of market of 4 n-vectors
 		Args:
@@ -249,23 +248,3 @@ class Market():
 			ask_px_vol = np.zeros(shape=(self.k,2))
 
 		return np.hstack( (bid_px_vol[:self.k, :], ask_px_vol[:self.k,:]) ).T
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

@@ -31,9 +31,9 @@ class BaseAgent():
 		Args:
 			dividend_amt: int, amount to increase cash holdings by per unit of asset held
 		'''
-		self.cash += max(self.assets, 0) * dividend_amt
+		self.cash += self.assets * dividend_amt
 
-	def cancel_orders(self, n):
+	def _cancel_orders(self, n):
 		'''
 		Updates list of open orders based on time before acting at each time step
 		Args:
@@ -63,7 +63,7 @@ class BaseAgent():
 	# 	self.current_val += 1
 
 	# helper function to convert observation to vector
-	def state_parser(self, obs=None, n=0):
+	def _state_parser(self, obs=None, n=0):
 		'''
 		Args:
 			obs: , representation of current state passed to informed agents

@@ -21,7 +21,7 @@ class RandomAgent(BaseAgent):
 			n: int, the time step
 		'''
 		# update open orders for next round
-		super().cancel_orders(n)
+		super()._cancel_orders(n)
 
 		# take action
 		oId = self.agentId + '_' + str(n) # set order ID
@@ -55,7 +55,3 @@ class RandomAgent(BaseAgent):
 		else:
 			return ref_price - phi*npr.randint(0,11) # up to 10 to have a deep enough book?
 			# phi*10*npr.rand() for continuous
-
-
-
-
