@@ -10,7 +10,6 @@ from constants import *
 
 if DEBUG:
 	import csv
-	import matplotlib.pyplot as plt
 
 # initialize agents
 # can update with inclusion of informed or noise traders
@@ -34,8 +33,8 @@ n = 1 							# count number of rounds
 dividend_out = True 			# track whether next dividend date is determined
 price = 0						# last market-clearing price
 num_trades_filled = 0			# number of trades executed at last price
-prices = []						# for visualizing price movements
-informed_agents_value = []		# do the informed agents make money?
+# prices = []						# for visualizing price movements
+informed_agents_pnl = 0		# do the informed agents make money?
 market = Market(MARKET_DEPTH) 	# market object that clears trades and maintains LOB
 
 # determine dividend date and size
@@ -57,41 +56,30 @@ agent_actions = {}
 # min_ask = np.inf
 # max_bid = -np.inf
 
+# for writing out results
+f_prices = open('prices.csv', 'w', newline='')
+wr_prices = csv.writer(f_prices)
+
+f_pnl = open('informed_agents_pnl.csv', 'w', newline='')
+wr_pnl = csv.writer(f_pnl)
+
+f_loss = open('training_loss.csv', 'w', newline='')
+wr_loss = csv.writer(f_loss)
+
 # run game loop
 while True:
 	if DEBUG:
-		print('time step:', n)
-		print('current market:\n', current_market)
-		print('price:', price)
-		prices.append(price)
-		informed_agents_value.append(informed_agents['i0'].current_value())
+		# print('time step:', n)
+		# print('current market:\n', current_market)
+		# print('price:', price)
+		wr_prices.writerow([price])
+
+		informed_agents_pnl = informed_agents['i0'].current_value()
+		wr_pnl.writerow([informed_agents_pnl])
+
+		wr_loss.writerow([informed_agents['i0'].training_loss()])
 
 	if n > DEBUG_ROUNDS:
-		# write to csv for reading in data in R for statistical test
-		with open('prices.csv', 'w', newline='') as myfile: 
-			wr = csv.writer(myfile, quoting=csv.QUOTE_ALL)
-			i = 0
-			for p in prices:
-				if i % 100 == 0:
-					wr.writerow([p])
-				i += 1
-
-		# plot graph of price movements
-		plt.figure(figsize=(50,10))
-		plt.plot(range(0,len(prices)), prices)
-		plt.title('Price Movements')
-
-		# plot portfolio value of informed agent
-		plt.figure(figsize=(50,10))
-		plt.plot(range(0, len(informed_agents_value)), informed_agents_value)
-		plt.title('Informed Agent Portfolio Value')
-
-		# plot loss
-		loss = informed_agents['i0'].training_loss()
-		plt.figure(figsize=(50,10))
-		plt.plot(range(0, len(loss)), loss)
-		plt.title('Training Loss')
-
 		break
 
 	# get actions from agents
@@ -131,6 +119,6 @@ while True:
 
 	n += 1
 
-for a in informed_agents.items():
+### after loop, save trained DQNs ###
+for _, a in informed_agents.items():
 	a.save_DQN()
-plt.show()

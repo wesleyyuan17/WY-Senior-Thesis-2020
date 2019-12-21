@@ -21,11 +21,11 @@ class SimpleAgent(BaseAgent):
 	target_DQN = None			# DQN that acts as target in double q learning
 	opt = None					# optimizer for running gradient descent
 	_FINAL_EPS_ = 0.1			# long-term floor probability of taking a random action
-	_MEM_START_SIZE_ = 50	 	# number of steps of random action
-	_TN_UPDATE_FREQ_ = 1 	# Every C steps, update target network
-	_BATCH_SIZE_ = 20			# batch size for batch training - equal to expected duration between dividends
+	_MEM_START_SIZE_ = 500	 	# number of steps of random action
+	_TN_UPDATE_FREQ_ = 1000 	# Every C steps, update target network
+	_BATCH_SIZE_ = 32			# batch size for batch training - equal to expected duration between dividends
 	_GAMMA_ = 0.99 				# discount factor for Bellman equation
-	_ALPHA_ = 0.00001 			# learning rate for parameter updates
+	_ALPHA_ = 0.000001 			# learning rate for parameter updates
 
 	def __init__(self, ID, state_size, informed):
 		if informed:
@@ -40,11 +40,11 @@ class SimpleAgent(BaseAgent):
 		self.informed = informed
 		self.prev_value	= 0
 		self.k = state_size
-		self.memory = Memory()
+		self.memory = Memory(batch_size=self._BATCH_SIZE_)
 		self.main_DQN = DQN(n_actions=30) # action space of 30 buy/sell/nothing by duration 1 through 10
 		self.target_DQN = DQN(n_actions=30)
 		self.opt = torch.optim.Adam(self.main_DQN.parameters(), lr=self._ALPHA_)
-		self.loss = []
+		self.loss = 0
 
 	def update_info(self, next_dividend, dividend_amt):
 		'''
@@ -70,7 +70,7 @@ class SimpleAgent(BaseAgent):
 		return self.loss
 
 	def save_DQN(self):
-		torch.save(self.main_DQN, self.agentId+'NN')
+		torch.save(self.main_DQN, self.agentId+'NN.pth')
 
 	def act(self, obs, price, last_executed, n):
 		'''
@@ -96,7 +96,7 @@ class SimpleAgent(BaseAgent):
 			raw_action = self.main_DQN.act(self.memory.get_current_state()) # act implemented to that it assumes no exploration
 
 			# update main network
-			loss = self._learn()
+			self.loss = self._learn()
 			# loss_list.append(loss)
 
 			# update target network as needed
@@ -106,7 +106,7 @@ class SimpleAgent(BaseAgent):
 		# map raw action to corresponding action/duration
 		self.last_action = raw_action
 		action = int(raw_action / 10) # 0-9: 0 (buy), 10-19: 1 (sell), 20-29: 2 (no action)
-		duration = (raw_action + 1) % 10
+		duration = raw_action % 10 + 1 # duration in [1,10]
 
 		if action == 0: # market buy order
 			price = obs[2,0] + 10 # submit order at inside-ask + 10
@@ -115,6 +115,10 @@ class SimpleAgent(BaseAgent):
 
 		oId = self.agentId + '_' + str(n) # set order ID
 		self.open_orders[oId] = (action, price, duration) # add to current open orders
+
+		# for debugging
+		print("next dividend amount:", self.dividend_amt, "action taken:", action)
+
 		return (oId, action, price, duration)
 
 	def _state_parser(self, obs, price, last_executed):
@@ -141,6 +145,19 @@ class SimpleAgent(BaseAgent):
 		'''
 		return max(self._MEM_START_SIZE_ / n, self._FINAL_EPS_)
 
+	def _clip_reward(self, reward):
+		'''
+		Reduces reward to sign for more stable learning
+		Args:
+			reward: double, value to be clipped
+		'''
+		if reward > 0:
+			return 1
+		elif reward == 0:
+			return 0
+		else:
+			return -1
+
 	def _update_memory(self, market_state, price):
 		'''
 		Adds previous action and resulting reward to memory, updates own state accordingly
@@ -149,7 +166,7 @@ class SimpleAgent(BaseAgent):
 			price: double, market-clearing price from last step
 		'''
 		new_value = self.assets*price + self.cash
-		reward = new_value - self.prev_value
+		reward = self._clip_reward(new_value - self.prev_value) # sign of change in cumulative net P&L
 		self.memory.add_memory(self.last_action, market_state, reward) #, self.dividend_paid) how would taking dividend_paid work? Also need to add other things later?
 
 		self.dividend_paid = False
@@ -186,13 +203,16 @@ class SimpleAgent(BaseAgent):
 		# if the game is over, targetQ=rewards
 		target_q = rewards + self._GAMMA_*double_q
 
+		# Q-value estimates using main DQN with action taken
+		# arg_q_max = torch.argmax(self.main_DQN.forward(states), dim=1)
+		est_q = self.main_DQN.forward(states)[range(self._BATCH_SIZE_), actions.tolist()]
+
 		self.opt.zero_grad() # zeros gradient buffer to set up for next update
 
 		# Gradient descend step to update the parameters of the main network
-		loss = torch.nn.functional.smooth_l1_loss(input=double_q, target=target_q, reduction='mean')
-		self.loss.append(loss)
+		loss = torch.nn.functional.smooth_l1_loss(input=est_q, target=target_q, reduction='mean')
 		loss.backward() # send updates to update buffer
 
 		self.opt.step() # take step using updates in update buffer
 
-		return loss
+		return loss.item() # .item() to store as scalar value instead of tensor

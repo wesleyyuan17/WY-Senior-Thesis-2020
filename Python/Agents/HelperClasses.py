@@ -12,7 +12,7 @@ class Memory():
 
 	# Initializes values of memory object
 	def __init__(self, mem_size=1000000, frame_height=6, frame_width=10, 
-				 batch_size=20, window_size=4):
+				 batch_size=32, window_size=4):
 		'''
 		Args:
 			mem_size: set maximum size of memory
@@ -136,25 +136,25 @@ class DQN(torch.nn.Module):
 		self.action_space = n_actions
 
 		'''
-		1st layer: 4 input channels, 32 filters of 2x2 w/ stride 2, apply rectifier
-		Output: 32x3x5
+		1st layer: 4 input channels, 32 filters of 2x2 w/ stride 2x1, apply rectifier
+		Output: 32x3x9
 
 		2nd layer: 32 input channels, 64 filters of 3x3 w/ stride 1, apply rectifier
-		Output: 64x1x3
+		Output: 64x1x7
 
-		3rd layer: 64 input channels, 1024 filters of 1x2 w/ stride 1, apply rectifier
+		3rd layer: 64 input channels, 1024 filters of 1x7 w/ stride 1, apply rectifier
 		Output: 1024x1x1
 		'''
 
 		self.conv = torch.nn.Sequential(
 			# 1st layer
-			torch.nn.Conv2d(window_size, n_filters[0], kernel_size=(2,2), stride=2, bias=False),
+			torch.nn.Conv2d(window_size, n_filters[0], kernel_size=(2,2), stride=(2,1), bias=False),
 			torch.nn.ReLU(),
 			# 2nd layer
 			torch.nn.Conv2d(n_filters[0], n_filters[1], kernel_size=(3,3), stride=1, bias=False),
 			torch.nn.ReLU(),
 			# 3rd layer
-			torch.nn.Conv2d(n_filters[1], n_filters[2], kernel_size=(1,3), stride=1, bias=False),
+			torch.nn.Conv2d(n_filters[1], n_filters[2], kernel_size=(1,7), stride=1, bias=False),
 			torch.nn.ReLU(),
 			)
 
