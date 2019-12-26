@@ -27,7 +27,7 @@ class SimpleAgent(BaseAgent):
 	_GAMMA_ = 0.99 				# discount factor for Bellman equation
 	_ALPHA_ = 0.000001 			# learning rate for parameter updates
 
-	def __init__(self, ID, state_size, informed):
+	def __init__(self, ID, state_size, informed, eval):
 		if informed:
 			super().__init__(ID, 'informed')
 			self.next_dividend = -1 # time of next dividend
@@ -41,10 +41,16 @@ class SimpleAgent(BaseAgent):
 		self.prev_value	= 0
 		self.k = state_size
 		self.memory = Memory(batch_size=self._BATCH_SIZE_)
-		self.main_DQN = DQN(n_actions=30) # action space of 30 buy/sell/nothing by duration 1 through 10
-		self.target_DQN = DQN(n_actions=30)
-		self.opt = torch.optim.Adam(self.main_DQN.parameters(), lr=self._ALPHA_)
-		self.loss = 0
+		if eval:
+			# evaluation mode - no learning
+			self.main_DQN = torch.load(self.agentId+'NN.pth')
+			self.main_DQN.eval()
+		else:
+			# training mode
+			self.main_DQN = DQN(n_actions=30) # action space of 30 buy/sell/nothing by duration 1 through 10
+			self.target_DQN = DQN(n_actions=30)
+			self.opt = torch.optim.Adam(self.main_DQN.parameters(), lr=self._ALPHA_)
+			self.loss = 0
 
 	def update_info(self, next_dividend, dividend_amt):
 		'''
@@ -95,13 +101,14 @@ class SimpleAgent(BaseAgent):
 		else:
 			raw_action = self.main_DQN.act(self.memory.get_current_state()) # act implemented to that it assumes no exploration
 
-			# update main network
-			self.loss = self._learn()
-			# loss_list.append(loss)
+			# make updates if in training mode
+			if not eval:
+				self.loss = self._learn()
+				# loss_list.append(loss)
 
-			# update target network as needed
-			if n % self._TN_UPDATE_FREQ_ == 0:
-				self._update_target_dqn()
+				# update target network as needed
+				if n % self._TN_UPDATE_FREQ_ == 0:
+					self._update_target_dqn()
 
 		# map raw action to corresponding action/duration
 		self.last_action = raw_action
@@ -176,8 +183,8 @@ class SimpleAgent(BaseAgent):
 		'''
 		Updates parameters of target DQN
 		'''
-		torch.save(self.main_DQN, 'NN.pth')
-		self.target_DQN = torch.load('NN.pth')
+		torch.save(self.main_DQN, self.agentId+'NN.pth')
+		self.target_DQN = torch.load(self.agentId+'NN.pth')
 		self.target_DQN.eval()
 
 	def _learn(self):

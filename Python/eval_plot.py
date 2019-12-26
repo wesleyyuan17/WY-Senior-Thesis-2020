@@ -17,10 +17,12 @@ fig1.savefig("./Plots/price_movements.png")
 fig2 = plt.figure(figsize=(50,10))
 plt.plot(range(0, len(informed_agents_pnl)), informed_agents_pnl)
 plt.title('Informed Agent Net PnL')
-fig2.savefig("./Plots/informed_agent_pnl.png")
+fig2.savefig("./Plots/informed_agent_training_pnl.png")
 
 # plot loss
 fig3 = plt.figure(figsize=(50,10))
 plt.plot(range(0, len(loss)), loss)
 plt.title('Training Loss')
 fig3.savefig("./Plots/training_loss.png")
+
+# evaluation of current agents?
