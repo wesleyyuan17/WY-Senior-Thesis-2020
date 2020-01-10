@@ -25,6 +25,9 @@ class Memory():
 		self.frame_width = frame_width
 		self.count = 0
 		self.current = 0
+		# self.moving_average = 0 # 20-period rolling window average of mid-price
+		# self.moving_stddev = 1 # 20-period rolling window std dev of mid-price
+		# self.price_window = [] # for calculating moving averages
 
 		# pre-allocate memory for memories
 		self.market_history = torch.empty((self.max_mem_size, self.frame_height, self.frame_width), dtype=torch.float32)
@@ -42,11 +45,22 @@ class Memory():
 		Args:
 			market_state: numpy array, representing new state to be added to memory
 		'''
-		self.market_history[self.current, ...] = torch.tensor(market_state)
+		# mid = (market_state[0][0] + market_state[2][2]) / 2
+		self.market_history[self.current, ...] = torch.tensor(market_state) # - mid # self.moving_average) / self.moving_stddev # normalized
 		self.actions[self.current] = action
 		self.rewards[self.current] = reward
 		self.count = min(self.count + 1, self.max_mem_size)
 		self.current = (self.current + 1) % self.max_mem_size
+
+		# updates on rolling window price history
+		# mid = (market_state[0][0] + market_state[2][0]) / 2
+		# self.price_window.append(mid)
+		# if len(self.price_window) > 20: # 100 to minimize probability of stddev = 0?
+		# 	self.price_window.pop(0)
+		# self.moving_average = np.mean(self.price_window)
+		# self.moving_stddev = np.std(self.price_window)
+		# if self.moving_stddev == 0:
+		# 	self.moving_stddev = 1000
 
 	# get sequence of memory as current state
 	def get_current_state(self):

@@ -20,12 +20,13 @@ class SimpleAgent(BaseAgent):
 	main_DQN = None				# DQN that learns actions
 	target_DQN = None			# DQN that acts as target in double q learning
 	opt = None					# optimizer for running gradient descent
-	_FINAL_EPS_ = 0.1			# long-term floor probability of taking a random action
+	_FINAL_EPS_ = 0.01			# long-term floor probability of taking a random action
 	_MEM_START_SIZE_ = 500	 	# number of steps of random action
-	_TN_UPDATE_FREQ_ = 1000 	# Every C steps, update target network
+	_MN_UPDATE_FREQ_ = 10		# Every C_m steps, update main network
+	_TN_UPDATE_FREQ_ = 5000 	# Every C_t steps, update target network
 	_BATCH_SIZE_ = 32			# batch size for batch training - equal to expected duration between dividends
 	_GAMMA_ = 0.99 				# discount factor for Bellman equation
-	_ALPHA_ = 0.000001 			# learning rate for parameter updates
+	_ALPHA_ = 0.0000001 		# learning rate for parameter updates
 
 	def __init__(self, ID, state_size, informed, eval):
 		if informed:
@@ -38,17 +39,18 @@ class SimpleAgent(BaseAgent):
 			super().__init__(ID, 'uninformed')
 
 		self.informed = informed
+		self.eval = eval
 		self.prev_value	= 0
 		self.k = state_size
 		self.memory = Memory(batch_size=self._BATCH_SIZE_)
 		if eval:
 			# evaluation mode - no learning
 			self.main_DQN = torch.load(self.agentId+'NN.pth')
-			self.main_DQN.eval()
+			self.main_DQN.eval() # needed to properly load parameters
 		else:
 			# training mode
-			self.main_DQN = DQN(n_actions=30) # action space of 30 buy/sell/nothing by duration 1 through 10
-			self.target_DQN = DQN(n_actions=30)
+			self.main_DQN = DQN(n_actions=3) # action space of 30 buy/sell/nothing by duration 1 through 10
+			self.target_DQN = DQN(n_actions=3)
 			self.opt = torch.optim.Adam(self.main_DQN.parameters(), lr=self._ALPHA_)
 			self.loss = 0
 
@@ -90,30 +92,33 @@ class SimpleAgent(BaseAgent):
 		# update open orders for next round
 		super()._cancel_orders(n)
 
-		current_state = self._state_parser(obs, price, last_executed)
+		current_state = self._state_parser(obs, price, last_executed, n)
 
 		# update memory with new transition based on new info
 		self._update_memory(current_state, price)
 
 		# take random action according to exploration/exploitation
 		if np.random.random() < self._eps_scheduler(n):
-			raw_action = np.random.randint(30)
+			raw_action = np.random.randint(3)
 		else:
 			raw_action = self.main_DQN.act(self.memory.get_current_state()) # act implemented to that it assumes no exploration
+			self.last_action = raw_action.item()
 
-			# make updates if in training mode
-			if not eval:
+		# make updates if in training mode
+		if not self.eval and n > self._MEM_START_SIZE_:
+			if n % self._MN_UPDATE_FREQ_ == 0:
 				self.loss = self._learn()
+				# print(self.loss)
 				# loss_list.append(loss)
 
-				# update target network as needed
-				if n % self._TN_UPDATE_FREQ_ == 0:
-					self._update_target_dqn()
+			# update target network as needed
+			if n % self._TN_UPDATE_FREQ_ == 0:
+				self._update_target_dqn()
 
 		# map raw action to corresponding action/duration
-		self.last_action = raw_action
-		action = int(raw_action / 10) # 0-9: 0 (buy), 10-19: 1 (sell), 20-29: 2 (no action)
-		duration = raw_action % 10 + 1 # duration in [1,10]
+		# self.last_action = raw_action
+		action = self.last_action # int(raw_action / 10) # 0-9: 0 (buy), 10-19: 1 (sell), 20-29: 2 (no action)
+		duration = 10 # raw_action % 10 + 1 # duration in [1,10]
 
 		if action == 0: # market buy order
 			price = obs[2,0] + 10 # submit order at inside-ask + 10
@@ -128,16 +133,25 @@ class SimpleAgent(BaseAgent):
 
 		return (oId, action, price, duration)
 
-	def _state_parser(self, obs, price, last_executed):
+	def _state_parser(self, obs, price, last_executed, n):
 		'''
 		Creates current state from market observation and instance variables
 		Args:
 			obs: 4xk array, represents bid price/volume in decreasing order and ask price/volume in increasing order
+			price: float, price at which last market cleared
+			last_executed: int, volume of trades cleared at last price
 			n: int, the time step
 		'''
+		# normalize market observation
+		mid = (obs[0,0] + obs[2,0]) / 2
+		# print('mid:', mid)
+		# print(obs)
+		obs[0, :] = obs[0, :] - mid
+		obs[2, :] = obs[2, :] - mid
+		# print(obs)
 
 		# creates addition to market state with agent-specific info and zero-pads to match length
-		addition = np.array([[price, self.cash, self.next_dividend], 
+		addition = np.array([[price, self.cash, self.next_dividend - n], 
 							 [last_executed, self.assets, self.dividend_amt]])
 		addition = np.pad(addition, ((0, 0), (0,self.k-3)), 'constant')
 
@@ -150,20 +164,7 @@ class SimpleAgent(BaseAgent):
 		Args:
 			n: int, time period
 		'''
-		return max(self._MEM_START_SIZE_ / n, self._FINAL_EPS_)
-
-	def _clip_reward(self, reward):
-		'''
-		Reduces reward to sign for more stable learning
-		Args:
-			reward: double, value to be clipped
-		'''
-		if reward > 0:
-			return 1
-		elif reward == 0:
-			return 0
-		else:
-			return -1
+		return max((2*self._MEM_START_SIZE_ - n) / self._MEM_START_SIZE_, self._FINAL_EPS_)
 
 	def _update_memory(self, market_state, price):
 		'''
@@ -173,7 +174,8 @@ class SimpleAgent(BaseAgent):
 			price: double, market-clearing price from last step
 		'''
 		new_value = self.assets*price + self.cash
-		reward = self._clip_reward(new_value - self.prev_value) # sign of change in cumulative net P&L
+		# reward = self._clip_reward(new_value - self.prev_value) # sign of change in cumulative net P&L
+		reward = new_value - self.prev_value
 		self.memory.add_memory(self.last_action, market_state, reward) #, self.dividend_paid) how would taking dividend_paid work? Also need to add other things later?
 
 		self.dividend_paid = False
@@ -186,6 +188,21 @@ class SimpleAgent(BaseAgent):
 		torch.save(self.main_DQN, self.agentId+'NN.pth')
 		self.target_DQN = torch.load(self.agentId+'NN.pth')
 		self.target_DQN.eval()
+
+	def _clip_rewards(self, rewards):
+		'''
+		Reduces reward to sign for more stable learning
+		Args:
+			reward: double, value to be clipped
+			rewards: numpy array, values to be clipped
+		'''
+		for i in range(len(rewards)):
+			if rewards[i] > 1:
+				rewards[i] = 1
+			elif rewards[i] < -1:
+				rewards[i] = -1
+
+		return rewards
 
 	def _learn(self):
 		'''
@@ -206,19 +223,25 @@ class SimpleAgent(BaseAgent):
 		# print(q_vals)
 		double_q = q_vals[range(self._BATCH_SIZE_), arg_q_max]
 
-		# Bellman equation. Multiplication with (1-terminal_flags) makes sure that 
-		# if the game is over, targetQ=rewards
-		target_q = rewards + self._GAMMA_*double_q
+		# target Q-values from Bellman equation, clipped to be (-1, 1)
+		target_q = self._clip_rewards(rewards + self._GAMMA_*double_q)
+		print(target_q)
 
 		# Q-value estimates using main DQN with action taken
-		# arg_q_max = torch.argmax(self.main_DQN.forward(states), dim=1)
 		est_q = self.main_DQN.forward(states)[range(self._BATCH_SIZE_), actions.tolist()]
-
-		self.opt.zero_grad() # zeros gradient buffer to set up for next update
+		print(est_q)
 
 		# Gradient descend step to update the parameters of the main network
 		loss = torch.nn.functional.smooth_l1_loss(input=est_q, target=target_q, reduction='mean')
+		# loss = torch.nn.functional.mse_loss(input=est_q, target=target_q, reduction='mean')
+
+		self.opt.zero_grad() # zeros gradient buffer to set up for next update
+
 		loss.backward() # send updates to update buffer
+
+		# clip gradients?
+		# for param in self.main_DQN.parameters():
+		# 	param.grad.data.clamp_(-1, 1)
 
 		self.opt.step() # take step using updates in update buffer
 

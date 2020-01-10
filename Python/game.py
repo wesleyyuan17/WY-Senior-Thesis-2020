@@ -39,7 +39,7 @@ market = Market(MARKET_DEPTH) 	# market object that clears trades and maintains 
 
 # determine dividend date and size
 dividend_time = n + np.random.geometric(p=DIVIDEND_PROB)
-dividend_amt = np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
+dividend_amt = 5*np.random.randint(-1, 2) # np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
 
 # select which agents know about first dividend - change to being constant subset that are always informed
 # informed_agents = random.sample(list(training_agents.values()), int(NUM_TRAINED_AGENTS * PERCENT_INFORMED))
@@ -57,19 +57,19 @@ agent_actions = {}
 # max_bid = -np.inf
 
 # for writing out results
-f_prices = open('prices.csv', 'w', newline='')
+f_prices = open('prices_aws.csv', 'w', newline='')
 wr_prices = csv.writer(f_prices)
 
-f_pnl = open('informed_agents_pnl.csv', 'w', newline='')
+f_pnl = open('informed_agents_pnl_aws.csv', 'w', newline='')
 wr_pnl = csv.writer(f_pnl)
 
-f_loss = open('training_loss.csv', 'w', newline='')
+f_loss = open('training_loss_aws.csv', 'w', newline='')
 wr_loss = csv.writer(f_loss)
 
 # run game loop
 while True:
 	if DEBUG:
-		# print('time step:', n)
+		print('time step:', n)
 		# print('current market:\n', current_market)
 		# print('price:', price)
 		wr_prices.writerow([price])
@@ -110,7 +110,7 @@ while True:
 
 		# determine dividend date and size
 		dividend_time = n + np.random.geometric(p=DIVIDEND_PROB)
-		dividend_amt = np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
+		dividend_amt = 5*np.random.randint(-1, 2) # np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
 
 		# select which agents know about dividend
 		# informed_agents = random.sample(list(training_agents.values()), int(NUM_TRAINED_AGENTS * PERCENT_INFORMED))
