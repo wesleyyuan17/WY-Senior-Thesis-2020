@@ -25,7 +25,7 @@ class SimpleAgent(BaseAgent):
 	_MN_UPDATE_FREQ_ = 10		# Every C_m steps, update main network
 	_TN_UPDATE_FREQ_ = 5000 	# Every C_t steps, update target network
 	_BATCH_SIZE_ = 32			# batch size for batch training - equal to expected duration between dividends
-	_GAMMA_ = 0.95 				# discount factor for Bellman equation
+	_GAMMA_ = 0.5 				# discount factor for Bellman equation
 	_ALPHA_ = 0.0000001 		# learning rate for parameter updates
 
 	def __init__(self, ID, state_size, informed, eval):
@@ -167,7 +167,10 @@ class SimpleAgent(BaseAgent):
 		Args:
 			n: int, time period
 		'''
-		return max(1 - n / (5*self._MEM_START_SIZE_), self._FINAL_EPS_)
+		if n < self._MEM_START_SIZE_: # only random actions until buffer is of certain size
+			return 1
+		else: # linearly decreasing exploration probability with set floor
+			return max(1 - (n - self._MEM_START_SIZE_) / (5*self._MEM_START_SIZE_), self._FINAL_EPS_)
 
 	def _update_memory(self, market_state, price):
 		'''
@@ -177,8 +180,8 @@ class SimpleAgent(BaseAgent):
 			price: double, market-clearing price from last step
 		'''
 		new_value = self.assets*price + self.cash
-		# reward = self._clip_reward(new_value - self.prev_value) # sign of change in cumulative net P&L
-		reward = new_value - self.prev_value # change in net mark-to-market P&L
+		reward = self._clip_reward(new_value - self.prev_value) # sign of change in cumulative net P&L
+		# reward = new_value - self.prev_value # change in net mark-to-market P&L
 		self.memory.add_memory(self.last_action, market_state, reward) #, self.dividend_paid) how would taking dividend_paid work? Also need to add other things later?
 
 		self.dividend_paid = False
@@ -193,20 +196,33 @@ class SimpleAgent(BaseAgent):
 		# self.target_DQN.eval()
 		self.target_DQN.load_state_dict(self.main_DQN.state_dict())
 
-	def _clip_rewards(self, rewards):
+	def _clip_reward(self, reward):
 		'''
 		Reduces reward to sign for more stable learning
 		Args:
 			reward: double, value to be clipped
 			rewards: numpy array, values to be clipped
 		'''
-		for i in range(len(rewards)):
-			if rewards[i] > 10:
-				rewards[i] = 10
-			elif rewards[i] < -10:
-				rewards[i] = -10
+		if reward > 0:
+			return 1
+		elif reward < 0:
+			return -1
+		else:
+			return 0
 
-		return rewards
+	def _clip_discount(self, disc_vals):
+		'''
+		Reduces reward to sign for more stable learning
+		Args:
+			rewards: numpy array, values to be clipped
+		'''
+		for i in range(len(disc_vals)):
+			if disc_vals[i] > 10:
+				disc_vals[i] = 10
+			elif disc_vals[i] < -10:
+				disc_vals[i] = -10
+
+		return disc_vals
 
 	def _learn(self):
 		'''
@@ -228,12 +244,12 @@ class SimpleAgent(BaseAgent):
 		double_q = q_vals[range(self._BATCH_SIZE_), arg_q_max]
 
 		# target Q-values from Bellman equation, clipped to be (-1, 1)
-		target_q = self._clip_rewards(rewards + self._GAMMA_*double_q)
-		print(target_q)
+		target_q = self._clip_discount(rewards + self._GAMMA_*double_q)
+		# print(target_q)
 
 		# Q-value estimates using main DQN with action taken
 		est_q = self.main_DQN.forward(states)[range(self._BATCH_SIZE_), actions.tolist()]
-		print(est_q)
+		# print(est_q)
 
 		# Gradient descend step to update the parameters of the main network
 		loss = torch.nn.functional.smooth_l1_loss(input=est_q, target=target_q, reduction='mean')
