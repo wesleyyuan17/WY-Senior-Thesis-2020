@@ -175,14 +175,16 @@ class DQN(torch.nn.Module):
 		# advantage stream
 		self.advantage = torch.nn.Sequential(
 			torch.nn.Linear(1024, 512),
-			torch.nn.ReLU(),
+			# torch.nn.ReLU(),
+			torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
 			torch.nn.Linear(512, self.action_space)
 			)
 
 		# value stream
 		self.value = torch.nn.Sequential(
 			torch.nn.Linear(1024, 512),
-			torch.nn.ReLU(),
+			# torch.nn.ReLU(),
+			torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
 			torch.nn.Linear(512, 1)
 			)
 
