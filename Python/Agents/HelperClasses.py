@@ -12,7 +12,7 @@ class Memory():
 
 	# Initializes values of memory object
 	def __init__(self, mem_size=1000000, frame_height=6, frame_width=10, 
-				 batch_size=32, window_size=4):
+				 batch_size=32, window_size=1):
 		'''
 		Args:
 			mem_size: set maximum size of memory
@@ -76,7 +76,7 @@ class Memory():
 			raise ValueError("The replay memory is empty!")
 		if index < self.window_size - 1:
 			raise ValueError("Index must be min 3")
-		return self.market_history[index-self.window_size+1:index+1, ...]
+		return self.market_history[index-self.window_size:index, ...]
 
 	# find indices that have valid contiguous frames at random points
 	def _get_valid_rand_indices(self):
@@ -126,8 +126,8 @@ class Memory():
 			raise ValueError('Unrecognized batch type')
 
 		for i, idx in enumerate(self.indices):
-			self.states[i] = self._get_state(idx-1)
-			self.new_states[i] = self._get_state(idx)
+			self.states[i] = self._get_state(idx)
+			self.new_states[i] = self._get_state(idx+1)
 
 		return [self.states, 
 				self.actions[self.indices], 
@@ -137,7 +137,7 @@ class Memory():
 # assume window is 20 - plan dilation around this window size
 # act method should assume always exploit
 class DQN(torch.nn.Module): 
-	def __init__(self, n_actions, n_filters=[32, 64, 1024], window_size=4): # maybe add more?
+	def __init__(self, n_actions, n_filters=[2, 64, 1024], window_size=1): # maybe add more?
 		'''
 		Args:
 			n_actions: int, number of valid actions for a state i.e. output dim
@@ -160,33 +160,60 @@ class DQN(torch.nn.Module):
 		Output: 1024x1x1
 		'''
 
+		# self.conv = torch.nn.Sequential(
+		# 	# 1st layer
+		# 	torch.nn.Conv2d(window_size, n_filters[0], kernel_size=(2,2), stride=(2,1), bias=True),
+		# 	torch.nn.ReLU(),
+		# 	# 2nd layer
+		# 	torch.nn.Conv2d(n_filters[0], n_filters[1], kernel_size=(3,3), stride=1, bias=True),
+		# 	torch.nn.ReLU(),
+		# 	# 3rd layer
+		# 	torch.nn.Conv2d(n_filters[1], n_filters[2], kernel_size=(1,7), stride=1, bias=True),
+		# 	torch.nn.ReLU(),
+		# 	)
+
+		# simplified
 		self.conv = torch.nn.Sequential(
 			# 1st layer
-			torch.nn.Conv2d(window_size, n_filters[0], kernel_size=(2,2), stride=(2,1), bias=False),
-			torch.nn.ReLU(),
+			torch.nn.Conv2d(window_size, n_filters[0], kernel_size=(2,2), stride=1, bias=True),
+			# torch.nn.ReLU(),
+			# torch.nn.Tanhshrink(),
 			# 2nd layer
-			torch.nn.Conv2d(n_filters[0], n_filters[1], kernel_size=(3,3), stride=1, bias=False),
-			torch.nn.ReLU(),
-			# 3rd layer
-			torch.nn.Conv2d(n_filters[1], n_filters[2], kernel_size=(1,7), stride=1, bias=False),
-			torch.nn.ReLU(),
+			# torch.nn.Conv2d(n_filters[0], n_filters[1], kernel_size=(1,3), stride=1, bias=True),
+			# torch.nn.ReLU()
 			)
+
+		# self.linear = torch.nn.Sequential(
+		# 	# 2nd layer
+		# 	torch.nn.Linear(n_filters[0], n_filters[1]),
+		# 	torch.nn.ReLU(),
+		# 	# 3rd layer
+		# 	torch.nn.Linear(n_filters[1], n_filters[2]),
+		# 	torch.nn.ReLU(),
+		# 	)
+
+		# self.linear = torch.nn.Sequential(
+		# 	# 2nd layer
+		# 	torch.nn.Linear(n_filters[0], self.action_space),
+		# 	# torch.nn.ReLU(),
+		# 	# torch.nn.Tanhshrink(),
+		# 	)
 
 		# advantage stream
-		self.advantage = torch.nn.Sequential(
-			torch.nn.Linear(1024, 512),
-			# torch.nn.ReLU(),
-			torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
-			torch.nn.Linear(512, self.action_space)
-			)
+		# self.advantage = torch.nn.Sequential(
+		# 	torch.nn.Linear(2, 2),
+		# 	torch.nn.ReLU(),
+		# 	# torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
+		# 	torch.nn.Linear(2, self.action_space)
+		# 	)
 
 		# value stream
-		self.value = torch.nn.Sequential(
-			torch.nn.Linear(1024, 512),
-			# torch.nn.ReLU(),
-			torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
-			torch.nn.Linear(512, 1)
-			)
+		# self.value = torch.nn.Sequential(
+		# 	torch.nn.Linear(2, 2),
+		# 	torch.nn.ReLU(),
+		# 	# torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
+		# 	torch.nn.Linear(2, 1)
+		# 	)
 
 	def forward(self, x):
 		'''
@@ -198,10 +225,14 @@ class DQN(torch.nn.Module):
 		'''
 		# x = torch.tensor(x).float()
 		x = self.conv(x) # pass through convolutional layer
-		value, advantage = torch.squeeze(x.clone()), torch.squeeze(x.clone()) # torch.chunk(torch.squeeze(x), 2)
-		value = self.value(value)
-		advantage = self.advantage(advantage)
-		return value + advantage - advantage.mean()
+		# x = self.linear(torch.squeeze(x))
+		# print(x.shape)
+		# value, advantage = torch.squeeze(x.clone()), torch.squeeze(x.clone()) # torch.chunk(torch.squeeze(x), 2)
+		# value = self.value(value)
+		# advantage = self.advantage(advantage)
+		# print(value.shape, advantage.shape)
+		# return value + advantage - advantage.mean()
+		return torch.squeeze(x)
 
 	def act(self, state):
 		'''
@@ -212,6 +243,7 @@ class DQN(torch.nn.Module):
 			action: integer, index corresponding to action with greatest predicted q-value
 		'''
 		q_val = self.forward(state)
+		# print("Estimated Q-values:", q_val.tolist())
 		action = torch.argmax(q_val)
 
 		return action

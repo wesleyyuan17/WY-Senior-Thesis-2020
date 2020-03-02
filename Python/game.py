@@ -38,8 +38,8 @@ informed_agents_pnl = 0		# do the informed agents make money?
 market = Market(MARKET_DEPTH) 	# market object that clears trades and maintains LOB
 
 # determine dividend date and size
-dividend_time = n + np.random.geometric(p=DIVIDEND_PROB)
-dividend_amt = 5*np.random.randint(-1, 2) # np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
+dividend_time = n + 10 # np.random.geometric(p=DIVIDEND_PROB)
+dividend_amt = np.random.choice([-20000,20000]) # np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
 
 # select which agents know about first dividend - change to being constant subset that are always informed
 # informed_agents = random.sample(list(training_agents.values()), int(NUM_TRAINED_AGENTS * PERCENT_INFORMED))
@@ -87,6 +87,8 @@ while True:
 		agent_actions[aId] = a.act(current_market, n)
 	for aId, a in training_agents.items():
 		agent_actions[aId] = a.act(current_market, price, num_trades_filled, n)
+		
+	# print('agent action received:', agent_actions)
 
 	# pass actions to market object to update state and agents
 	current_market, price, num_trades_filled = market.update(agent_actions, training_agents, noise_agents, n)
@@ -109,8 +111,8 @@ while True:
 		dividend_out = True # track whether next dividend date is determined
 
 		# determine dividend date and size
-		dividend_time = n + np.random.geometric(p=DIVIDEND_PROB)
-		dividend_amt = 5*np.random.randint(-1, 2) # np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
+		dividend_time = n + 10 # np.random.geometric(p=DIVIDEND_PROB)
+		dividend_amt = np.random.choice([-20000,20000]) # np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
 
 		# select which agents know about dividend
 		# informed_agents = random.sample(list(training_agents.values()), int(NUM_TRAINED_AGENTS * PERCENT_INFORMED))

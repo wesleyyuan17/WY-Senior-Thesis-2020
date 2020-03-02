@@ -22,7 +22,7 @@ class Market():
 		self.sell_actions = {} 								# dict, key is price, value is list of tuples of (agentId, orderId, duration)
 		self.price = 0 										# market-clearing price
 		self.num_trades_filled = 0 							# number of orders filled at market-clearing price
-		self.k = k 											# depth of market ot return
+		self.k = k 											# depth of market to return
 		self.current_market = np.zeros(shape=(4,self.k)) 	# current market environment as 4xk matrix
 
 	def update(self, agent_actions, training_agents, noise_agents, n):
@@ -130,6 +130,7 @@ class Market():
 					agId, oId, _ = a
 					if agId in training_agents:
 						training_agents[agId].filled_order( (oId, action, self.price) )
+						# print('training agent order filled')
 					else:
 						noise_agents[agId].filled_order( (oId, action, self.price) )
 			else:
@@ -138,6 +139,7 @@ class Market():
 					agId, oId, _ = a
 					if agId in training_agents:
 						training_agents[agId].filled_order( (oId, action, self.price) )
+						# print('training agent order filled')
 					else:
 						noise_agents[agId].filled_order( (oId, action, self.price) )
 				orders[temp_px] = [acts[j] for j in (set(list(range(temp_vol))) - set(fill_orders))]
