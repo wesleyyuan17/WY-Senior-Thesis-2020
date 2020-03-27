@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 
 prices = pd.read_csv('prices_aws.csv')
 informed_agents_pnl = pd.read_csv('informed_agents_pnl_aws.csv')
-loss = pd.read_csv('training_loss_aws.csv')
+loss = pd.read_csv('informed_training_loss_aws.csv')
 # loss = loss[500:]
 
 # plot graph of price movements

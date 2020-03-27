@@ -19,8 +19,8 @@ for n in range(NUM_TRAINED_AGENTS):
 
 ### no uninformed traders yet ###
 uninformed_agents = {}
-# for n in range(NUM_TRAINED_AGENTS):
-# 	uninformed_agents['u' + str(n)] = SimpleAgent(ID=n, state_size=MARKET_DEPTH, informed=False)
+for n in range(NUM_TRAINED_AGENTS):
+	uninformed_agents['u' + str(n)] = SimpleAgent(ID=n, state_size=MARKET_DEPTH, informed=False, eval=False)
 
 training_agents = {**informed_agents, **uninformed_agents}
 
@@ -33,16 +33,12 @@ n = 1 							# count number of rounds
 dividend_out = True 			# track whether next dividend date is determined
 price = 0						# last market-clearing price
 num_trades_filled = 0			# number of trades executed at last price
-# prices = []						# for visualizing price movements
 informed_agents_pnl = 0		# do the informed agents make money?
 market = Market(MARKET_DEPTH) 	# market object that clears trades and maintains LOB
 
 # determine dividend date and size
 dividend_time = n + 10 # np.random.geometric(p=DIVIDEND_PROB)
-dividend_amt = np.random.choice([-20000,20000]) # np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
-
-# select which agents know about first dividend - change to being constant subset that are always informed
-# informed_agents = random.sample(list(training_agents.values()), int(NUM_TRAINED_AGENTS * PERCENT_INFORMED))
+dividend_amt = np.random.choice([-20,20]) # np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
 
 # give informed traders information
 for _, a in informed_agents.items():
@@ -51,10 +47,6 @@ for _, a in informed_agents.items():
 # initialize market
 current_market = np.zeros(shape=(4,MARKET_DEPTH)) # each row is top 10 of bid/ask price/volume
 agent_actions = {}
-# buy_actions = {} # key is price, value is list of tuples of (agent ID, orderID, cancellation times)
-# sell_actions = {}
-# min_ask = np.inf
-# max_bid = -np.inf
 
 # for writing out results
 f_prices = open('prices_aws.csv', 'w', newline='')
@@ -63,21 +55,34 @@ wr_prices = csv.writer(f_prices)
 f_pnl = open('informed_agents_pnl_aws.csv', 'w', newline='')
 wr_pnl = csv.writer(f_pnl)
 
-f_loss = open('training_loss_aws.csv', 'w', newline='')
+f_loss = open('informed_training_loss_aws.csv', 'w', newline='')
 wr_loss = csv.writer(f_loss)
+
+fu_pnl = open('uninformed_agents_pnl_aws.csv', 'w', newline='')
+wru_pnl = csv.writer(fu_pnl)
+
+fu_loss = open('uninformed_training_loss_aws.csv', 'w', newline='')
+wru_loss = csv.writer(fu_loss)
 
 # run game loop
 while True:
 	if DEBUG:
-		print('time step:', n)
+		print('\ntime step:', n)
 		# print('current market:\n', current_market)
 		# print('price:', price)
 		wr_prices.writerow([price])
 
+		# write informed agents data
 		informed_agents_pnl = informed_agents['i0'].current_value()
 		wr_pnl.writerow([informed_agents_pnl])
 
 		wr_loss.writerow([informed_agents['i0'].training_loss()])
+
+		# write uninformed agents data
+		uninformed_agents_pnl = uninformed_agents['u0'].current_value()
+		wru_pnl.writerow([uninformed_agents_pnl])
+
+		wru_loss.writerow([uninformed_agents['u0'].training_loss()])
 
 	if n > DEBUG_ROUNDS:
 		break
@@ -88,22 +93,15 @@ while True:
 	for aId, a in training_agents.items():
 		agent_actions[aId] = a.act(current_market, price, num_trades_filled, n)
 		
-	# print('agent action received:', agent_actions)
-
 	# pass actions to market object to update state and agents
 	current_market, price, num_trades_filled = market.update(agent_actions, training_agents, noise_agents, n)
-
-	# update memory
-	# mem.add_memory(current_market)
 
 	# distribute dividend (could have it at beginning of period?)
 	if n == dividend_time:
 		for _, a in training_agents.items():
 			a.update_val(dividend_amt)
-			# a.update_info(next_dividend=-1, dividend_amt=0)
 		for _, a in noise_agents.items():
 			a.update_val(dividend_amt)
-			# a.update_info(next_dividend=-1, dividend_amt=0)
 		dividend_out = False
 
 	# select next dividends if none and which agents know
@@ -112,15 +110,14 @@ while True:
 
 		# determine dividend date and size
 		dividend_time = n + 10 # np.random.geometric(p=DIVIDEND_PROB)
-		dividend_amt = np.random.choice([-20000,20000]) # np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
+		dividend_amt = np.random.choice([-20,20]) # np.random.normal(DIVIDEND_MEAN, DIVIDEND_STD)
 
-		# select which agents know about dividend
-		# informed_agents = random.sample(list(training_agents.values()), int(NUM_TRAINED_AGENTS * PERCENT_INFORMED))
+		# notify agents about dividend info
 		for _, a in informed_agents.items():
 			a.update_info(dividend_time, dividend_amt)
 
 	n += 1
 
 ### after loop, save trained DQNs ###
-for _, a in informed_agents.items():
+for _, a in training_agents.items():
 	a.save_DQN()

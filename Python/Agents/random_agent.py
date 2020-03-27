@@ -25,7 +25,7 @@ class RandomAgent(BaseAgent):
 
 		# take action
 		oId = self.agentId + '_' + str(n) # set order ID
-		action = npr.randint(3)
+		action = npr.randint(2)
 		if action == 0: # buy order
 
 			price = self.pick_price(obs[2,0], n, True) #  + npr.randint(-7, 3) # number between -7 to 2 inclusive
