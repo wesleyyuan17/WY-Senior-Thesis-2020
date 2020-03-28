@@ -27,9 +27,9 @@ class SimpleAgent(BaseAgent):
 	_TN_UPDATE_FREQ_ = 10000 	# Every C_t steps, update target network
 	_BATCH_SIZE_ = 32			# batch size for batch training - equal to expected duration between dividends
 	_GAMMA_ = 0.99 				# discount factor for Bellman equation
-	_ALPHA_ = 0.0001 		# learning rate for parameter updates
+	_ALPHA_ = 0.0001 			# learning rate for parameter updates
 
-	def __init__(self, ID, state_size, informed, eval):
+	def __init__(self, ID, state_size, informed, eval_mode):
 		if informed:
 			super().__init__(ID, 'informed')
 			self.next_dividend = -1 # time of next dividend
@@ -40,7 +40,7 @@ class SimpleAgent(BaseAgent):
 			super().__init__(ID, 'uninformed')
 
 		self.informed = informed
-		self.eval = eval
+		self.eval_mode = eval_mode
 		self.prev_value	= 0
 		self.assets_at_div = 0
 		self.last_dividend = 0
@@ -48,8 +48,8 @@ class SimpleAgent(BaseAgent):
 		if self.informed:
 			self.memory = Memory(batch_size=self._BATCH_SIZE_, frame_height=2, frame_width=2)
 		else:
-			self.memory = Memory(batch_size=self._BATCH_SIZE_, frame_height=2, frame_width=2, window_size=10)
-		if eval:
+			self.memory = Memory(batch_size=self._BATCH_SIZE_, frame_height=2, frame_width=2, window_size=4)
+		if eval_mode:
 			# evaluation mode - no learning
 			self.main_DQN = torch.load(self.agentId+'NN.pth')
 			self.main_DQN.eval() # needed to properly load parameters
@@ -59,8 +59,8 @@ class SimpleAgent(BaseAgent):
 				self.main_DQN = DQN(n_actions=2) # action space of 30 buy/sell/nothing by duration 1 through 10
 				self.target_DQN = DQN(n_actions=2)
 			else:
-				self.main_DQN = DQN(n_actions=2, window_size=10) # action space of 30 buy/sell/nothing by duration 1 through 10
-				self.target_DQN = DQN(n_actions=2, window_size=10)
+				self.main_DQN = DQN(n_actions=2, window_size=4) # action space of 30 buy/sell/nothing by duration 1 through 10
+				self.target_DQN = DQN(n_actions=2, window_size=4)
 			self.opt = torch.optim.Adam(self.main_DQN.parameters(), lr=self._ALPHA_)
 			self.loss = 0
 
@@ -135,7 +135,7 @@ class SimpleAgent(BaseAgent):
 		self.last_action = raw_action
 
 		# make updates if in training mode
-		if not self.eval and n > self._MEM_START_SIZE_:
+		if not self.eval_mode and n > self._MEM_START_SIZE_:
 			if n % self._MN_UPDATE_FREQ_ == 0:
 				self.loss = self.__learn()
 
@@ -210,6 +210,9 @@ class SimpleAgent(BaseAgent):
 		Args:
 			n: int, time period
 		'''
+		if self.eval_mode:
+			return self._FINAL_EPS_
+
 		if n < self._MEM_START_SIZE_: # only random actions until buffer is of certain size
 			return 1
 		else: # linearly decreasing exploration probability with set floor

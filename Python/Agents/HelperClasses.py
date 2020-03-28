@@ -176,7 +176,7 @@ class DQN(torch.nn.Module):
 		self.conv = torch.nn.Sequential(
 			# 1st layer
 			torch.nn.Conv2d(window_size, n_filters[0], kernel_size=(2,2), stride=1, bias=True),
-			# torch.nn.ReLU(),
+			torch.nn.ReLU(),
 			# torch.nn.Tanhshrink(),
 			# 2nd layer
 			# torch.nn.Conv2d(n_filters[0], n_filters[1], kernel_size=(1,3), stride=1, bias=True),

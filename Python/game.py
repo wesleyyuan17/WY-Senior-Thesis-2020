@@ -15,12 +15,12 @@ if DEBUG:
 # can update with inclusion of informed or noise traders
 informed_agents = {}
 for n in range(NUM_TRAINED_AGENTS):
-	informed_agents['i' + str(n)] = SimpleAgent(ID=n, state_size=MARKET_DEPTH, informed=True, eval=False)
+	informed_agents['i' + str(n)] = SimpleAgent(ID=n, state_size=MARKET_DEPTH, informed=True, eval_mode=False)
 
 ### no uninformed traders yet ###
 uninformed_agents = {}
 for n in range(NUM_TRAINED_AGENTS):
-	uninformed_agents['u' + str(n)] = SimpleAgent(ID=n, state_size=MARKET_DEPTH, informed=False, eval=False)
+	uninformed_agents['u' + str(n)] = SimpleAgent(ID=n, state_size=MARKET_DEPTH, informed=False, eval_mode=False)
 
 training_agents = {**informed_agents, **uninformed_agents}
 
