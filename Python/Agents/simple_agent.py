@@ -4,6 +4,10 @@ import torch
 from .base_agent import BaseAgent
 from .HelperClasses import *
 
+cuda_avail = torch.cuda.is_available()
+if cuda_avail:
+	cuda = torch.device('cuda')
+
 class SimpleAgent(BaseAgent):
 	'''
 	Simple agent that takes in current market state and uses it (plus agent-specific knowledge if any)
@@ -20,7 +24,7 @@ class SimpleAgent(BaseAgent):
 	main_DQN = None				# DQN that learns actions
 	target_DQN = None			# DQN that acts as target in double q learning
 	opt = None					# optimizer for running gradient descent
-	_MAX_PORT_SIZE_ = 50			# maximum number of shares long/short by agent
+	_MAX_PORT_SIZE_ = 50		# maximum number of shares long/short by agent
 	_FINAL_EPS_ = 0.01			# long-term floor probability of taking a random action
 	_MEM_START_SIZE_ = 2000	 	# number of steps of random action
 	_MN_UPDATE_FREQ_ = 1		# Every C_m steps, update main network
@@ -45,10 +49,16 @@ class SimpleAgent(BaseAgent):
 		self.assets_at_div = 0
 		self.last_dividend = 0
 		self.k = state_size
+		
 		if self.informed:
-			self.memory = Memory(batch_size=self._BATCH_SIZE_, frame_height=2, frame_width=2)
+			self.window_size = 3
+			self.memory = Memory(batch_size=self._BATCH_SIZE_, frame_height=2, frame_width=2, window_size=self.window_size)
 		else:
-			self.memory = Memory(batch_size=self._BATCH_SIZE_, frame_height=2, frame_width=2, window_size=4)
+			self.window_size = 3
+			self.memory = Memory(batch_size=self._BATCH_SIZE_, frame_height=2, frame_width=4, window_size=self.window_size)
+			self._ALPHA_ = 0.01 # diff erent learning rates for different agents?
+			self.last_dividend_time = 0 # for tracking time since last dividend
+		
 		if eval_mode:
 			# evaluation mode - no learning
 			self.main_DQN = torch.load(self.agentId+'NN.pth')
@@ -56,11 +66,20 @@ class SimpleAgent(BaseAgent):
 		else:
 			# training mode
 			if self.informed:
-				self.main_DQN = DQN(n_actions=2) # action space of 30 buy/sell/nothing by duration 1 through 10
-				self.target_DQN = DQN(n_actions=2)
+				if cuda_avail:
+					self.main_DQN = DQN(n_actions=3, window_size=self.window_size, informed=informed).to(cuda) # action space of 30 buy/sell/nothing by duration 1 through 10
+					self.target_DQN = DQN(n_actions=3, window_size=self.window_size, informed=informed).to(cuda)
+				else:
+					self.main_DQN = DQN(n_actions=3, window_size=self.window_size, informed=informed) # action space of 30 buy/sell/nothing by duration 1 through 10
+					self.target_DQN = DQN(n_actions=3, window_size=self.window_size, informed=informed)
 			else:
-				self.main_DQN = DQN(n_actions=2, window_size=4) # action space of 30 buy/sell/nothing by duration 1 through 10
-				self.target_DQN = DQN(n_actions=2, window_size=4)
+				if cuda_avail:
+					self.main_DQN = DQN(n_actions=3, n_filters=[256, 1024, 1024], frame_width=4, window_size=self.window_size, informed=informed).to(cuda) # action space of 30 buy/sell/nothing by duration 1 through 10
+					self.target_DQN = DQN(n_actions=3, n_filters=[256, 1024, 1024], frame_width=4, window_size=self.window_size, informed=informed).to(cuda)
+				else:
+					self.main_DQN = DQN(n_actions=3, n_filters=[256, 1024, 1024], frame_width=4, window_size=self.window_size, informed=informed) # action space of 30 buy/sell/nothing by duration 1 through 10
+					self.target_DQN = DQN(n_actions=3, n_filters=[256, 1024, 1024], frame_width=4, window_size=self.window_size, informed=informed)
+			
 			self.opt = torch.optim.Adam(self.main_DQN.parameters(), lr=self._ALPHA_)
 			self.loss = 0
 
@@ -75,16 +94,19 @@ class SimpleAgent(BaseAgent):
 		self.dividend_amt = dividend_amt
 		# self.dividend_paid = True
 
-	def update_val(self, dividend_amt):
+	def update_val(self, dividend_amt, n):
 		'''
 		Update agent's current wealth by dividend amount
 		Args:
 			dividend_amt: int, amount to increase cash holdings by per unit of asset held
+			n: int, the time step
 		'''
 		self.cash += self.assets * dividend_amt
 		self.dividend_paid = True
 		self.assets_at_div = self.assets
 		self.last_dividend = dividend_amt
+		if not self.informed:
+			self.last_dividend_time = n
 		# self.assets = 0 # soft reset of state
 
 	def current_value(self):
@@ -102,7 +124,7 @@ class SimpleAgent(BaseAgent):
 	def save_DQN(self):
 		torch.save(self.main_DQN, self.agentId+'NN.pth')
 
-	def act(self, obs, price, last_executed, n):
+	def act(self, obs, price, last_executed, total_buy_volume, total_sell_volume, n):
 		'''
 		Updates self memory/reward and takes an action based on current market state
 		Args:
@@ -114,7 +136,7 @@ class SimpleAgent(BaseAgent):
 		# update open orders for next round
 		super()._cancel_orders(n)
 
-		current_state = self.__state_parser(obs, price, last_executed, n)
+		current_state = self.__state_parser(obs, price, last_executed, total_buy_volume, total_sell_volume, n)
 
 		# update memory with new transition based on new info
 		self.__update_memory(current_state, price)
@@ -122,16 +144,19 @@ class SimpleAgent(BaseAgent):
 		# take random action according to exploration/exploitation
 		if np.abs(self.assets) < self._MAX_PORT_SIZE_:
 			if np.random.random() < self.__eps_scheduler(n):
-					raw_action = np.random.randint(2)
+					raw_action = np.random.randint(3)
 					# self.last_action = raw_action
 			else:
-				raw_action = self.main_DQN.act(self.memory.get_current_state()).item() # act implemented to that it assumes no exploration
-				# self.last_action = raw_action.item()
+				if cuda_avail:
+					raw_action = self.main_DQN.act(self.memory.get_current_state().to(cuda)).item() # act implemented to that it assumes no exploration
+					# self.last_action = raw_action.item()
+				else:
+					raw_action = self.main_DQN.act(self.memory.get_current_state()).item() # act implemented to that it assumes no exploration
 		elif self.assets >= self._MAX_PORT_SIZE_:
-			raw_action = 1
+			raw_action = int(np.random.choice([1, 2])) # casting to int to circumvent weird issue with np.int64 incompatible with torchInt array
 			# self.last_action = raw_action
 		elif self.assets <= -self._MAX_PORT_SIZE_:
-			raw_action = 0
+			raw_action = int(np.random.choice([0, 2])) # casting to int to circumvent weird issue with np.int64 incompatible with torchInt array
 		self.last_action = raw_action
 
 		# make updates if in training mode
@@ -157,14 +182,14 @@ class SimpleAgent(BaseAgent):
 		self.open_orders[oId] = (action, price, duration) # add to current open orders
 
 		# for debugging
-		print('state variable:\n', current_state)
-		if self.informed:
-			print('next dividend amount:', self.dividend_amt, 'asset holdings:', self.assets, 'action taken:', action)
+		# print('state variable:\n', current_state)
+		# if self.informed:
+		# 	print('next dividend amount:', self.dividend_amt, 'asset holdings:', self.assets, 'action taken:', action)
 		# print('agent action submitted:', oId, action, price, duration)
 
 		return (oId, action, price, duration)
 
-	def __state_parser(self, obs, price, last_executed, n):
+	def __state_parser(self, obs, price, last_executed, total_buy_volume, total_sell_volume, n):
 		'''
 		Creates current state from market observation and instance variables
 		Args:
@@ -186,7 +211,7 @@ class SimpleAgent(BaseAgent):
 		norm_obs[2, :] = norm_obs[2, :] - mid
 		norm_obs = norm_obs.reshape( (2,2) )
 
-		norm_obs[0, 1] = norm_obs[0, 1] - norm_obs[1, 1] # trade imbalance
+		norm_obs[0, 1] = norm_obs[0, 1] - norm_obs[1, 1] # quote imbalance
 		norm_obs[1, 1] = self.assets # include number of assets somehow
 
 		if self.informed:
@@ -202,7 +227,16 @@ class SimpleAgent(BaseAgent):
 
 			return np.hstack( (norm_obs, addition) )[:, 1:]
 		else:
-			return norm_obs
+			if n > 1:
+				# trade_imbalance = (total_buy_volume - total_sell_volume) / (total_buy_volume + total_sell_volume)
+				trade_imbalance = total_buy_volume - total_sell_volume
+			else:
+				# divide by 0 on first iteration where no trades have been submitted yet
+				trade_imbalance = 0
+			addition = np.array([[trade_imbalance, price - mid], 
+								 [last_executed, n - self.last_dividend_time]])
+			# print(addition)
+			return np.hstack( (norm_obs, addition) )
 
 	def __eps_scheduler(self, n):
 		'''
@@ -211,7 +245,10 @@ class SimpleAgent(BaseAgent):
 			n: int, time period
 		'''
 		if self.eval_mode:
-			return self._FINAL_EPS_
+			if n > self.window_size:
+				return self._FINAL_EPS_
+			else:
+				return 1
 
 		if n < self._MEM_START_SIZE_: # only random actions until buffer is of certain size
 			return 1
@@ -233,8 +270,7 @@ class SimpleAgent(BaseAgent):
 			reward = float(self.last_dividend * self.assets_at_div)
 		else:
 			reward = float(np.sign(new_value - self.prev_value))
-			# reward = float(np.sign(self.dividend_amt * -(2*self.last_action - 1)))
-		print('reward:', reward)
+		# print('reward:', reward)
 		self.memory.add_memory(self.last_action, market_state, reward) #, self.dividend_paid) how would taking dividend_paid work? Also need to add other things later?
 
 		self.dividend_paid = False
@@ -283,6 +319,10 @@ class SimpleAgent(BaseAgent):
 		# Draw a minibatch from the replay memory
 		states, actions, rewards, new_states = self.memory.get_minibatch(batch_type='rand') # update to match what is obtained from get_minibatch call
 
+		# send to GPU?
+		if cuda_avail:
+			states, actions, rewards, new_states = states.to(cuda), actions.to(cuda), rewards.to(cuda), new_states.to(cuda)
+
 		# The main network estimates which action is best (in the next state s', new_states is passed!) 
 		# for every transition in the minibatch
 		# print(self.main_DQN.forward(new_states).shape)
@@ -299,11 +339,13 @@ class SimpleAgent(BaseAgent):
 		# target Q-values from Bellman equation, clipped to be (-1, 1)
 		# target_q = self.__clip_discount(rewards + self._GAMMA_*double_q)
 		target_q = rewards + self._GAMMA_*double_q
-		# print(target_q)
+		if not self.informed:
+			print(target_q)
 
 		# Q-value estimates using main DQN with action taken
 		est_q = self.main_DQN.forward(states)[range(self._BATCH_SIZE_), actions.tolist()]
-		# print(est_q)
+		if not self.informed:
+			print(est_q)
 
 		# Gradient descend step to update the parameters of the main network
 		loss = torch.nn.functional.smooth_l1_loss(input=est_q, target=target_q, reduction='mean')
@@ -316,10 +358,16 @@ class SimpleAgent(BaseAgent):
 		# clip gradients?
 		# for param in self.main_DQN.parameters():
 		# 	param.grad.data.clamp_(-1, 1)
-
-		# print(self.main_DQN.conv[0].weight)
-		# print(self.main_DQN.linear[0].weight)
-		# print(self.main_DQN.conv[0].weight.grad)
+		# if not self.informed:
+			# print(loss)
+			# print(self.main_DQN.conv[0].weight)
+		# 	print(self.main_DQN.value[2].weight.grad)
+		# 	print(self.main_DQN.advantage[2].weight.grad)
+		# 	print(self.main_DQN.value[0].weight.grad)
+		# 	print(self.main_DQN.advantage[0].weight.grad)
+		# 	print(self.main_DQN.linear[2].weight.grad)
+		# 	print(self.main_DQN.linear[0].weight.grad)
+			# print(self.main_DQN.conv[0].weight.grad)
 
 		self.opt.step() # take step using updates in update buffer
 

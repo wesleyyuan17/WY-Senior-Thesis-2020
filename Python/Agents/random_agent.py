@@ -55,3 +55,9 @@ class RandomAgent(BaseAgent):
 		else:
 			return ref_price - phi*npr.randint(0,11) # up to 10 to have a deep enough book?
 			# phi*10*npr.rand() for continuous
+
+	def current_value(self, price):
+		'''
+		Returns current mark-to-market value of agent's portfolio
+		'''
+		return self.assets*price + self.cash

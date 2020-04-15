@@ -13,15 +13,16 @@
 # }
 library(tseries)
 prices = read.csv("prices.csv", header=FALSE)$V1
+price.diff = diff(prices)
 
 # print(dfTest(prices, drift=TRUE))
 # print(dfTest(prices, drift=FALSE))
 x <- cumsum(rnorm(1000)) # no unit-root
 example.dftest = adf.test(x)
 
-df.test = adf.test(prices)
-kp.test = kpss.test(prices)
-pacf(prices, lag.max=30)
+df.test = adf.test(price.diff)
+kp.test = kpss.test(price.diff)
+pacf(price.diff, lag.max=30)
 # pacf(x) # comparison pacf plot
-acf(prices, lag.max=30)
+acf(price.diff, lag.max=30)
 acf(x) # comparison acf plot

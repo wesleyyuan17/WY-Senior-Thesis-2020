@@ -137,7 +137,7 @@ class Memory():
 # assume window is 20 - plan dilation around this window size
 # act method should assume always exploit
 class DQN(torch.nn.Module): 
-	def __init__(self, n_actions, n_filters=[32, 64, 512], window_size=1): # maybe add more?
+	def __init__(self, n_actions, n_filters=[64, 64, 512], frame_width=2, window_size=1, informed=True): # maybe add more?
 		'''
 		Args:
 			n_actions: int, number of valid actions for a state i.e. output dim
@@ -149,64 +149,81 @@ class DQN(torch.nn.Module):
 		
 		self.action_space = n_actions
 
-		'''
-		1st layer: 4 input channels, 32 filters of 2x2 w/ stride 2x1, apply rectifier
-		Output: 32x3x9
+		if informed:
+			self.conv = torch.nn.Sequential(
+				# 1st layer
+				torch.nn.Conv2d(window_size, n_filters[0], kernel_size=(2,frame_width), stride=1, bias=True),
+				torch.nn.ReLU(),
+				# torch.nn.Tanhshrink(),
+				)
 
-		2nd layer: 32 input channels, 64 filters of 3x3 w/ stride 1, apply rectifier
-		Output: 64x1x7
+			self.linear = torch.nn.Sequential(
+				# 2nd layer
+				torch.nn.Linear(n_filters[0], n_filters[1]),
+				torch.nn.ReLU(),
+				# torch.nn.Tanhshrink(),
+				# 3rd layer
+				torch.nn.Linear(n_filters[1], n_filters[1]),
+				torch.nn.ReLU(),
+				)
 
-		3rd layer: 64 input channels, 1024 filters of 1x7 w/ stride 1, apply rectifier
-		Output: 1024x1x1
-		'''
+			# advantage stream
+			self.advantage = torch.nn.Sequential(
+				torch.nn.Linear(n_filters[1], n_filters[1]),
+				torch.nn.ReLU(),
+				# torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
+				torch.nn.Linear(n_filters[1], self.action_space)
+				)
 
-		# self.conv = torch.nn.Sequential(
-		# 	# 1st layer
-		# 	torch.nn.Conv2d(window_size, n_filters[0], kernel_size=(2,2), stride=(2,1), bias=True),
-		# 	torch.nn.ReLU(),
-		# 	# 2nd layer
-		# 	torch.nn.Conv2d(n_filters[0], n_filters[1], kernel_size=(3,3), stride=1, bias=True),
-		# 	torch.nn.ReLU(),
-		# 	# 3rd layer
-		# 	torch.nn.Conv2d(n_filters[1], n_filters[2], kernel_size=(1,7), stride=1, bias=True),
-		# 	torch.nn.ReLU(),
-		# 	)
+			# value stream
+			self.value = torch.nn.Sequential(
+				torch.nn.Linear(n_filters[1], n_filters[1]),
+				torch.nn.ReLU(),
+				# torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
+				torch.nn.Linear(n_filters[1], 1)
+				)
+		else:
+			self.conv = torch.nn.Sequential(
+				# 1st layer
+				torch.nn.Conv2d(window_size, n_filters[0], kernel_size=(2,frame_width), stride=1, bias=True),
+				torch.nn.ReLU(),
+				# torch.nn.Tanhshrink(),
+				)
 
-		# simplified
-		self.conv = torch.nn.Sequential(
-			# 1st layer
-			torch.nn.Conv2d(window_size, n_filters[0], kernel_size=(2,2), stride=1, bias=True),
-			torch.nn.ReLU(),
-			# torch.nn.Tanhshrink(),
-			# 2nd layer
-			# torch.nn.Conv2d(n_filters[0], n_filters[1], kernel_size=(1,3), stride=1, bias=True),
-			# torch.nn.ReLU()
-			)
+			self.linear = torch.nn.Sequential(
+				# 2nd layer
+				torch.nn.Linear(n_filters[0], n_filters[0]),
+				torch.nn.ReLU(),
+				# torch.nn.Tanhshrink(),
+				# 3rd layer
+				torch.nn.Linear(n_filters[0], n_filters[1]),
+				torch.nn.ReLU(),
+				# torch.nn.Tanhshrink(),
+				# 4th layer
+				torch.nn.Linear(n_filters[1], n_filters[1]),
+				# torch.nn.ReLU(),
+				torch.nn.Tanhshrink(),
+				# 5th layer
+				torch.nn.Linear(n_filters[1], n_filters[1]),
+				# torch.nn.ReLU(),
+				torch.nn.Tanhshrink(),
+				)
 
-		self.linear = torch.nn.Sequential(
-			# 2nd layer
-			torch.nn.Linear(n_filters[0], n_filters[1]),
-			torch.nn.ReLU(),
-			# torch.nn.Tanhshrink(),
-			torch.nn.Linear(n_filters[1], n_filters[1]),
-			torch.nn.ReLU(),
-			)
+			# advantage stream
+			self.advantage = torch.nn.Sequential(
+				torch.nn.Linear(n_filters[1], n_filters[1]),
+				# torch.nn.ReLU(),
+				torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
+				torch.nn.Linear(n_filters[1], self.action_space)
+				)
 
-		# advantage stream
-		self.advantage = torch.nn.Sequential(
-			torch.nn.Linear(n_filters[1], n_filters[1]),
-			torch.nn.ReLU(),
-			# torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
-			torch.nn.Linear(n_filters[1], self.action_space)
-			)
-
-		# value stream
-		self.value = torch.nn.Sequential(
-			torch.nn.Linear(n_filters[1], n_filters[1]),
-			torch.nn.ReLU(),
-			# torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
-			torch.nn.Linear(n_filters[1], 1)
-			)
+			# value stream
+			self.value = torch.nn.Sequential(
+				torch.nn.Linear(n_filters[1], n_filters[1]),
+				# torch.nn.ReLU(),
+				torch.nn.Tanhshrink(), # like a smooth, symmetric ReLU? - negative Q-values unlike with RelU
+				torch.nn.Linear(n_filters[1], 1)
+				)
 
 	def forward(self, x):
 		'''
@@ -236,7 +253,7 @@ class DQN(torch.nn.Module):
 			action: integer, index corresponding to action with greatest predicted q-value
 		'''
 		q_val = self.forward(state)
-		print("Estimated Q-values:", q_val.tolist())
+		# print("Estimated Q-values:", q_val.tolist())
 		action = torch.argmax(q_val)
 
 		return action
